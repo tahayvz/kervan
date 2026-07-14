@@ -1,12 +1,14 @@
 # Kervan — Lokal altyapı (local infrastructure)
 #
-# Faz 0: sadece PostgreSQL. Her mikroservis KENDİ veritabanına sahip olacak
-# (database-per-service, bkz. docs/ARCHITECTURE.md §2). Lokalde tek Postgres
-# instance içinde ayrı DB'ler açarak bunu simüle ediyoruz; prod'da ayrı sunucular olur.
+# Faz 0: PostgreSQL (işlemsel çekirdek) + MongoDB (katalog — document/NoSQL).
+# Polyglot persistence, bkz. docs/ARCHITECTURE.md §2.1 ve ADR-0006.
+# Her mikroservis KENDİ veritabanına sahip olacak (database-per-service). Lokalde
+# tek Postgres instance içinde ayrı DB'ler açarak bunu simüle ediyoruz; prod'da ayrı olur.
 #
 # Sonraki fazlarda bu dosya büyüyecek:
 #   Faz 2 → Keycloak
-#   Faz 3 → Kafka + Schema Registry + Debezium (Kafka Connect)
+#   Faz 3 → Kafka + Schema Registry + Debezium (Kafka Connect; Mongo change streams
+#           için Mongo replica set moduna alınacak)
 #   Faz 5 → Elasticsearch + Redis
 #   Faz 6 → Prometheus + Grafana + Jaeger + Loki
 #
@@ -16,6 +18,7 @@
 name: kervan
 
 services:
+  # İşlemsel çekirdek: sipariş / ödeme / stok (ACID)
   postgres:
     image: postgres:16-alpine
     container_name: kervan-postgres
@@ -36,5 +39,28 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Katalog: esnek ürün öznitelikleri (document / NoSQL) — ADR-0006
+  mongodb:
+    image: mongo:7
+    container_name: kervan-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: kervan
+      MONGO_INITDB_ROOT_PASSWORD: kervan
+      MONGO_INITDB_DATABASE: catalog
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    # Not: Faz 3'te Debezium MongoDB connector'ı change streams okuyabilmek için
+    # Mongo'nun replica set modunda olması gerekecek (tek düğümlü rs yeterli).
+    # O fazda: command: ["--replSet","rs0"] + bir kez rs.initiate() eklenecek.
+
 volumes:
   postgres-data:
+  mongo-data:
