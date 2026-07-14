@@ -44,9 +44,10 @@ Her commit **ne yaptığını ve neden yaptığını** anlatır.
 | Şema yönetimi | Confluent Schema Registry + Apache Avro |
 | CDC | Debezium (PostgreSQL → Kafka) |
 | Dağıtık tutarlılık | Transactional Outbox + Saga (orchestration) |
-| Veri | PostgreSQL, Flyway (migration) |
-| Arama | Elasticsearch |
-| Cache / kilit / rate-limit | Redis |
+| Veri (işlemsel) | PostgreSQL + Flyway (sipariş/ödeme/stok — ACID) |
+| Veri (katalog, NoSQL) | MongoDB + Mongock (esnek ürün öznitelikleri) |
+| Arama (NoSQL) | Elasticsearch |
+| Cache / kilit / rate-limit (NoSQL) | Redis |
 | API Gateway | Spring Cloud Gateway |
 | Kimlik / yetki | Keycloak (OAuth2 / OIDC / JWT) |
 | Dayanıklılık | Resilience4j (circuit breaker, retry, bulkhead) |
@@ -73,7 +74,7 @@ Her commit **ne yaptığını ve neden yaptığını** anlatır.
               ┌─────────────┘   │   └─────────────┐
         ┌─────▼─────┐    ┌──────▼──────┐   ┌──────▼──────┐
         │  Catalog   │    │    Order     │   │   Search    │
-        │  Service   │    │   Service    │   │  Service    │
+        │ (MongoDB)  │    │  (Postgres)  │   │(Elasticsrch)│
         └─────┬─────┘    └──────┬──────┘   └──────▲──────┘
               │ Outbox           │ Saga             │ indeksleme
               │                  ▼                  │
@@ -86,7 +87,8 @@ Her commit **ne yaptığını ve neden yaptığını** anlatır.
         │  Service   │     │   Service    │     │  Service    │
         └───────────┘     └──────────────┘     └─────────────┘
 
-  Yatay kesitler: PostgreSQL · Redis · Elasticsearch · Debezium
+  Veri (polyglot): PostgreSQL (işlemsel) · MongoDB (katalog) · Redis · Elasticsearch
+  CDC: Debezium (Postgres WAL + MongoDB change streams) → Kafka
   Gözlem: OpenTelemetry → Jaeger (trace) · Prometheus/Grafana (metrik) · Loki (log)
 ```
 
@@ -101,7 +103,7 @@ Proje **fazlar** hâlinde ilerler. Her faz kendi içinde çalışır durumda tes
 | Faz | Konu | Durum |
 |---|---|---|
 | 0 | Temel, dokümantasyon, mono-repo iskeleti, altyapı compose | ✅ Bu commit |
-| 1 | Catalog Service (Postgres, Flyway, OpenAPI, Testcontainers) | ⏳ |
+| 1 | Catalog Service (MongoDB, Mongock, OpenAPI, Testcontainers) | ⏳ |
 | 2 | API Gateway + Keycloak (OAuth2/OIDC) | ⏳ |
 | 3 | Event-driven: Kafka + Avro + Schema Registry + Outbox + Debezium | ⏳ |
 | 4 | Order/Payment/Inventory + Saga (orchestration) | ⏳ |

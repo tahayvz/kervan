@@ -61,13 +61,41 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 
 ---
 
-## Veri Katmanı
+## Veri Katmanı — Polyglot Persistence
 
-### PostgreSQL
-- **Problem:** Servislerin transaction'lı, ilişkisel, güvenilir yazma deposu.
+> **İlke (ADR-0006):** Tek bir veri teknolojisi her yere zorlanmaz. Her servis işine
+> en uygun deposu seçer. Bu proje **4 veri ailesi** kullanır: ilişkisel (PostgreSQL),
+> document (MongoDB), arama (Elasticsearch), key-value (Redis). Sonuncu üçü **NoSQL**
+> ailelerindendir — yani proje "birincil NoSQL deposu" (MongoDB) dâhil geniş bir yelpaze taşır.
+
+### PostgreSQL — işlemsel çekirdek
+- **Problem:** Sipariş/ödeme/stok gibi **para ve tutarlılık kritik** veriler için
+  transaction'lı, ilişkisel, güvenilir yazma deposu.
 - **Neden:** Açık kaynak, ACID, JSONB, olgun; Debezium ile **logical replication**
-  desteği (CDC için şart). Her servis **kendi** Postgres şemasına sahip.
+  desteği (CDC için şart). Order/Payment/Inventory servisleri bunu kullanır; her biri
+  **kendi** veritabanına sahip.
 - **Alternatif:** MySQL de olur; Postgres'in logical decoding'i Debezium için daha temiz.
+
+### MongoDB — katalog (document / NoSQL)
+- **Problem:** Ürün öznitelikleri **heterojen ve şema-esnek**: ayakkabı → numara/renk;
+  kitap → ISBN/yazar/sayfa; telefon → RAM/ekran/pil. İlişkisel şemada bu, ya yüzlerce
+  nullable kolon ya **EAV anti-deseni** doğurur — sorgusu ve bakımı acı verir.
+- **Neden:** Document model bu esnekliği doğal karşılar; her ürün kendi alanlarıyla bir
+  belge. Zengin sorgu/indeksleme, yatay ölçek (sharding). Debezium **MongoDB connector**
+  ile change streams üzerinden CDC → Kafka mümkün (Catalog → Search akışının kaynağı).
+- **Alternatif elenmesi:** Postgres + `jsonb` de olurdu (tek teknoloji sadeliği) ama
+  kategori-bazlı zengin sorgu/indeksleme ve belge modelleme MongoDB'de daha doğal;
+  ayrıca proje **document DB yetkinliğini** açıkça göstermeyi hedefliyor. *(Bkz. ADR-0006.)*
+- **Kurumsal karşılığı:** Ürün kataloğu, MongoDB'nin ders-kitabı kullanım alanıdır;
+  büyük e-ticarette çok yaygın.
+
+### Mongock — MongoDB migration
+- **Problem:** MongoDB "schema-less" olsa da veri/indeks değişiklikleri **versiyonlu ve
+  tekrarlanabilir** olmalı; elle `mongosh` komutu ortamlar arası tutarsızlık demektir.
+- **Neden:** Mongock, MongoDB için Flyway/Liquibase muadili: kod-tabanlı, sıralı,
+  bir-kez-çalışan changeset'ler; Spring Boot ile entegre; indeks oluşturma/veri backfill
+  için idealdir.
+- **Kurumsal karşılığı:** "NoSQL'de migration yapılmaz" yanılgısını kıran, olgun ekip refleksi.
 
 ### Flyway
 - **Problem:** Şema değişikliğini elle yapmak = ortamlar arası tutarsızlık = felaket.
@@ -175,7 +203,7 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 
 | Halka | Anlam | Örnekler |
 |---|---|---|
-| **ADOPT** | Bu projede kesin kullanılıyor | Java 21, Spring Boot, Kafka, Postgres, Redis, Testcontainers, Docker |
-| **TRIAL** | Kullanılıyor, ekipçe derinleşilecek | Debezium, Avro/Schema Registry, OTel, Resilience4j, Helm |
-| **ASSESS** | Faz-sonrası değerlendirilecek | Spring Cloud Contract, gRPC, OpenSearch, chaos testing |
+| **ADOPT** | Bu projede kesin kullanılıyor | Java 21, Spring Boot, Kafka, PostgreSQL, **MongoDB**, Redis, Elasticsearch, Testcontainers, Docker |
+| **TRIAL** | Kullanılıyor, ekipçe derinleşilecek | Debezium, Avro/Schema Registry, **Mongock**, OTel, Resilience4j, Helm |
+| **ASSESS** | Faz-sonrası değerlendirilecek | **Cassandra (wide-column, yazma-yoğun)**, Spring Cloud Contract, gRPC, OpenSearch, chaos testing |
 | **HOLD** | Bilerek kaçınılan | Hystrix (deprecated), servis-servis senkron zincir, paylaşılan DB |

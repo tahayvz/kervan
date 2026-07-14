@@ -37,15 +37,19 @@ gerçek veritabanına karşı entegrasyon testi.
 
 **Ne inşa edilecek:**
 - `catalog-service`: ürün / kategori / marka yönetimi
-- PostgreSQL + **Flyway** (versiyonlu şema migration)
+- **MongoDB** (document / NoSQL) + Spring Data MongoDB — esnek ürün öznitelikleri (ADR-0006)
+- **Mongock** (versiyonlu migration / indeks oluşturma — MongoDB'nin Flyway'i)
 - REST API + **OpenAPI** (springdoc) — sözleşme dokümante
 - Katmanlı mimari (web → application → domain → infrastructure)
-- **Testcontainers** ile gerçek Postgres'e karşı entegrasyon testi
+- **Testcontainers** ile gerçek MongoDB'ye karşı entegrasyon testi
 - Çok aşamalı (multi-stage) **Dockerfile** (küçük, güvenli imaj)
 - Global hata yönetimi (RFC 7807 `ProblemDetail`)
 
-**Mülakatta karşılığı:** "Testcontainers ile H2 değil gerçek Postgres'e test yazıyorum;
-Flyway ile şemayı versiyonluyorum; API-first tasarımla OpenAPI sözleşmesi üretiyorum."
+**Mülakatta karşılığı:** "Katalogu MongoDB'de document olarak modelledim çünkü ürün
+öznitelikleri kategoriye göre değişken; Mongock ile NoSQL migration'ı versiyonladım;
+Testcontainers ile gerçek Mongo'ya test yazdım; API-first ile OpenAPI sözleşmesi ürettim."
+> Not: İlişkisel dünya ve **Flyway** Faz 4'te gelir (Order/Payment/Inventory → Postgres),
+> böylece iki migration aracını (Mongock + Flyway) da göstermiş oluruz.
 
 ---
 
@@ -77,8 +81,9 @@ anda yazma) ele alınmazsa veri tutarsız kalır.
 - **Apache Avro** ile şemalı event'ler (geriye/ileriye uyumluluk)
 - **Transactional Outbox** deseni: event, iş verisiyle **aynı transaction**'da
   outbox tablosuna yazılır
-- **Debezium** (CDC): outbox tablosundaki değişiklikleri okuyup Kafka'ya taşır —
-  "dual write" problemi kökten çözülür
+- **Debezium** (CDC): değişiklikleri okuyup Kafka'ya taşır — "dual write" problemi
+  kökten çözülür. **İki kaynak:** Postgres (WAL, outbox tablosu) + MongoDB (change
+  streams, Catalog) — aynı desen, iki farklı depo (ADR-0006)
 - Ortak `event-contracts` modülü (Avro şemaları tek yerde)
 
 **Mülakatta karşılığı:** "Dual-write problemini Transactional Outbox + Debezium CDC
@@ -92,7 +97,8 @@ ile çözdüm; event'leri Avro + Schema Registry ile şemalayıp uyumluluğu gar
 dağıtık transaction (2PC) ölçeklenmez. Çözüm: **Saga** (telafi edici işlemler).
 
 **Ne inşa edilecek:**
-- `order-service`, `payment-service`, `inventory-service`
+- `order-service`, `payment-service`, `inventory-service` — hepsi **PostgreSQL + Flyway**
+  (para/stok ACID ister; Faz 1'deki Mongock'un yanına Flyway'i de göstermiş oluruz)
 - **Saga (orchestration)**: OrderCreated → ReserveStock → ProcessPayment →
   ConfirmOrder; herhangi bir adım başarısızsa **compensation** (StockReleased,
   PaymentRefunded, OrderCancelled)

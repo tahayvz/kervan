@@ -24,18 +24,37 @@ saniyede yüzlerce kez yazılır. Bu yüzden **mikroservis** ayrımı yaparız.
 Her context **kendi verisine sahiptir** (database-per-service). Başka bir servisin
 tablosuna asla doğrudan erişilmez — yalnızca API veya event üzerinden konuşulur.
 
-| Context | Sorumluluk | Veri sahibi |
+| Context | Sorumluluk | Veri sahibi (depo) |
 |---|---|---|
-| **Catalog** | Ürün, kategori, marka, öznitelik | products, categories, brands |
-| **Inventory** | Stok miktarı, rezervasyon | stock, reservations |
-| **Order** | Sipariş yaşam döngüsü, Saga orkestrasyonu | orders, order_items, saga_state |
-| **Payment** | Ödeme alma / iade | payments, refunds |
-| **Search** | Okuma modeli (CQRS), arama indeksi | Elasticsearch index |
-| **Notification** | E-posta / SMS / push (simülasyon) | notifications |
+| **Catalog** | Ürün, kategori, marka, öznitelik | **MongoDB** — `products` koleksiyonu |
+| **Inventory** | Stok miktarı, rezervasyon | **PostgreSQL** — stock, reservations |
+| **Order** | Sipariş yaşam döngüsü, Saga orkestrasyonu | **PostgreSQL** — orders, order_items, saga_state |
+| **Payment** | Ödeme alma / iade | **PostgreSQL** — payments, refunds |
+| **Search** | Okuma modeli (CQRS), arama indeksi | **Elasticsearch** index |
+| **Notification** | E-posta / SMS / push (simülasyon) | **PostgreSQL** — notifications |
 | **Identity** | Kimlik & yetki (Keycloak devreder) | Keycloak realm |
 
 > **İlke:** "Servis sınırı = veri sahipliği sınırı." Paylaşılan veritabanı yoktur.
 > Bu, ekiplerin bağımsız deploy edebilmesinin ön koşuludur.
+
+### 2.1 Polyglot persistence (çok-depolu kalıcılık)
+
+Her servis **işine en uygun** veri deposunu seçer — tek bir teknolojiyi her yere
+zorlamayız (bkz. ADR-0006):
+
+| Depo | Aile | Nerede & neden |
+|---|---|---|
+| **PostgreSQL** | İlişkisel (ACID) | Sipariş/ödeme/stok — para ve stok kesin tutarlılık ister |
+| **MongoDB** | Document (NoSQL) | Katalog — kategoriye göre değişen esnek öznitelikler |
+| **Elasticsearch** | Arama motoru (NoSQL) | Arama okuma modeli — ters indeks, facet, relevance |
+| **Redis** | Key-value (NoSQL) | Cache, dağıtık kilit, rate-limit — mikrosaniye erişim |
+
+> **Neden katalog MongoDB?** Ürün öznitelikleri heterojendir (ayakkabı → numara/renk;
+> kitap → ISBN/yazar). İlişkisel şemada bu, ya yüzlerce nullable kolon ya EAV
+> anti-deseni doğurur. Belge modeli bu esnekliği doğal karşılar.
+>
+> **Neden para/stok Postgres?** Finansal doğruluk ve stok bütünlüğü için ACID
+> transaction ve ilişkisel garantiler şarttır — burada esneklik değil kesinlik önceliklidir.
 
 ---
 
@@ -84,6 +103,12 @@ event kaybolur (ya da tam tersi). Sonuç: **tutarsız veri**.
 Debezium, DB'nin **write-ahead log**'unu (WAL) okuyup outbox kayıtlarını Kafka'ya
 taşır. Böylece uygulama kodu Kafka'ya hiç dokunmaz; kayıp/çift yazma imkânsızlaşır.
 
+> **Çok-kaynaklı CDC:** Debezium yalnızca Postgres'e özgü değildir. Postgres için
+> **WAL**, MongoDB için **change streams** (oplog) okur. Polyglot persistence (ADR-0006)
+> nedeniyle projede iki kaynak da vardır: işlemsel servisler (Order/Payment/Inventory)
+> Postgres WAL'ından, Catalog ise MongoDB change streams'ten Kafka'ya akar. Aynı desen,
+> iki farklı depo. *(MongoDB change streams için Mongo replica set modunda çalışmalı.)*
+
 ### 4.3 Saga (çoklu servis tutarlılığı)
 Sipariş akışı birden çok servisi kapsar; 2PC (two-phase commit) ölçeklenmez.
 Bunun yerine **orchestration-based Saga**:
@@ -103,10 +128,10 @@ orkestratördür; durumu `saga_state` tablosunda tutar. Tüketiciler **idempoten
 
 ## 5. CQRS (okuma/yazma ayrımı) — Arama örneği
 
-Katalog **yazma modeli** (Postgres) ile **okuma modeli** (Elasticsearch) ayrılır:
+Katalog **yazma modeli** (MongoDB) ile **okuma modeli** (Elasticsearch) ayrılır:
 
 ```
-Catalog(Postgres, yazma) ──event──▶ Kafka ──▶ Search Service ──▶ Elasticsearch(okuma)
+Catalog(MongoDB, yazma) ──event──▶ Kafka ──▶ Search Service ──▶ Elasticsearch(okuma)
 ```
 Yazma tarafı normalize/tutarlı; okuma tarafı arama için denormalize/hızlı. İkisi
 **eventual consistency** ile senkron kalır. Bu, e-ticaret aramasının standart desenidir.
@@ -152,7 +177,8 @@ bile **tek bir trace** olarak görünür.
 - **12-Factor:** Config ortam değişkeninden; stateless servisler; log stdout'a.
 - **Güvenlik:** Merkezî auth (Keycloak), servisler stateless resource-server.
 - **Idempotency:** Tüm event tüketicileri ve ödeme çağrıları idempotent.
-- **Migration:** Şema değişimi yalnızca Flyway ile, versiyonlu ve ileriye uyumlu.
+- **Migration:** Şema/veri değişimi versiyonlu ve ileriye uyumlu — Postgres'te **Flyway**,
+  MongoDB'de **Mongock**. Elle şema değişikliği yasak.
 - **Container:** Multi-stage build, non-root user, distroless/temurin slim imaj.
 
 ---
