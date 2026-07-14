@@ -1,0 +1,40 @@
+# Kervan — Lokal altyapı (local infrastructure)
+#
+# Faz 0: sadece PostgreSQL. Her mikroservis KENDİ veritabanına sahip olacak
+# (database-per-service, bkz. docs/ARCHITECTURE.md §2). Lokalde tek Postgres
+# instance içinde ayrı DB'ler açarak bunu simüle ediyoruz; prod'da ayrı sunucular olur.
+#
+# Sonraki fazlarda bu dosya büyüyecek:
+#   Faz 2 → Keycloak
+#   Faz 3 → Kafka + Schema Registry + Debezium (Kafka Connect)
+#   Faz 5 → Elasticsearch + Redis
+#   Faz 6 → Prometheus + Grafana + Jaeger + Loki
+#
+# Çalıştırma:  docker compose -f infra/docker/docker-compose.yml up -d
+# Durdurma:    docker compose -f infra/docker/docker-compose.yml down
+
+name: kervan
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kervan-postgres
+    environment:
+      POSTGRES_USER: kervan
+      POSTGRES_PASSWORD: kervan
+      POSTGRES_DB: kervan   # varsayılan; ek DB'ler init script ile açılır
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Konteyner ilk açıldığında her servis için ayrı veritabanı oluşturur
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kervan"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
