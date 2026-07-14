@@ -1,0 +1,37 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: catalog-service
+  data:
+    mongodb:
+      # 12-Factor: config ortam değişkeninden gelir; lokal varsayılan compose ile uyumlu.
+      # authSource=admin — root kullanıcı admin veritabanında tanımlı (compose).
+      uri: ${MONGODB_URI:mongodb://kervan:kervan@localhost:27017/catalog?authSource=admin}
+      # İndeksler Mongock migration'ıyla yönetilir; Spring'in otomatik indekslemesi kapalı.
+      auto-index-creation: false
+
+# Mongock — migration changeset'lerinin tarandığı paket
+mongock:
+  migration-scan-package: com.kervan.catalog.infrastructure.migration
+  enabled: true
+
+# Actuator — health/liveness/readiness (K8s probe'ları, Faz 9)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+
+# OpenAPI / Swagger UI konumu
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
