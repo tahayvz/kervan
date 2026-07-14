@@ -20,6 +20,7 @@ sorusuna işaret edebileceğin yazılı bir kanıttır.
 - [ADR-0003](0003-kafka-over-rabbitmq.md) — Event omurgası: Kafka (RabbitMQ değil)
 - [ADR-0004](0004-transactional-outbox-debezium.md) — Dual-write: Outbox + Debezium
 - [ADR-0005](0005-saga-orchestration.md) — Dağıtık tutarlılık: Saga (orchestration)
+- [ADR-0006](0006-polyglot-persistence-mongodb.md) — Polyglot persistence: Catalog MongoDB, çekirdek PostgreSQL
 
 ## Yeni ADR nasıl yazılır
 `NNNN-kisa-baslik.md` adıyla, `_template.md`'yi kopyalayarak.
