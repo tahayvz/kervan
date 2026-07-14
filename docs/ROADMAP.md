@@ -29,7 +29,7 @@ kayıtlı. Mono-repo + multi-module Maven ile bağımlılıkları merkezî yöne
 
 ---
 
-## Faz 1 — Catalog Service (ilk mikroservis)
+## Faz 1 — Catalog Service (ilk mikroservis)  ✅
 
 **Neden:** Event-driven'a geçmeden önce **tek bir servisi kusursuz** yapmak gerekir:
 temiz katmanlı mimari, migration disiplini, sözleşme öncelikli (API-first) tasarım,

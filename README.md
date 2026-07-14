@@ -103,7 +103,7 @@ Proje **fazlar** hâlinde ilerler. Her faz kendi içinde çalışır durumda tes
 | Faz | Konu | Durum |
 |---|---|---|
 | 0 | Temel, dokümantasyon, mono-repo iskeleti, altyapı compose | ✅ Bu commit |
-| 1 | Catalog Service (MongoDB, Mongock, OpenAPI, Testcontainers) | ⏳ |
+| 1 | Catalog Service (MongoDB, Mongock, OpenAPI, Testcontainers) | ✅ |
 | 2 | API Gateway + Keycloak (OAuth2/OIDC) | ⏳ |
 | 3 | Event-driven: Kafka + Avro + Schema Registry + Outbox + Debezium | ⏳ |
 | 4 | Order/Payment/Inventory + Saga (orchestration) | ⏳ |
