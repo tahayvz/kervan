@@ -26,14 +26,16 @@
     <packaging>pom</packaging>
 
     <name>Kervan Commerce Platform</name>
-    <description>Event-driven, çok servisli e-ticaret platformu (öğrenme/portföy)</description>
+    <description>Event-driven, çok servisli e-ticaret platformu</description>
 
     <!--
       Servis modülleri fazlar geldikçe buraya eklenir.
       Faz 1: catalog-service (MongoDB üzerinde ilk mikroservis).
+      Faz 3: order-service (PostgreSQL + Transactional Outbox → Kafka).
     -->
     <modules>
         <module>catalog-service</module>
+        <module>order-service</module>
     </modules>
 
     <properties>
