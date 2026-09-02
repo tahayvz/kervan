@@ -27,16 +27,17 @@ Documentation under `docs/` is written in Turkish.
 
 ## Status — honest version
 
-The project is built in phases, and each phase ships something that runs. **Phase 1 is
-complete; the rest is designed but not yet implemented.** The architecture below is the
-target; the table says what actually exists today.
+The project is built in phases, and each phase ships something that runs. The
+architecture below is the target; the table says what actually exists today. Nothing is
+marked done unless its code and tests are in this repository.
 
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Mono-repo skeleton, ADRs, architecture docs, local infra compose | ✅ Done |
 | 1 | **Catalog Service** — MongoDB, Mongock migrations, OpenAPI, Testcontainers | ✅ Done |
+| 3a | **Order Service + Transactional Outbox → Kafka** | ✅ Done |
 | 2 | API Gateway + Keycloak (OAuth2 / OIDC) | Planned |
-| 3 | Kafka + Avro + Schema Registry + Transactional Outbox + Debezium | Planned |
+| 3b | Avro + Schema Registry + Debezium CDC | Planned |
 | 4 | Order / Payment / Inventory + Saga orchestration | Planned |
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
@@ -95,9 +96,12 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ---
 
-## Implemented today: Catalog Service
+## Implemented today
 
-Hexagonal architecture — the domain has no Spring or MongoDB types in it.
+Both services use hexagonal architecture — the domain packages contain no Spring, JPA or
+MongoDB types, so business rules are tested without a database.
+
+### Catalog Service
 
 ```
 domain/          product model, value objects, repository port
@@ -113,6 +117,39 @@ web/             REST controllers, DTOs, RFC 7807 error handling
 
 Service documentation: [catalog-service/README.md](catalog-service/README.md)
 
+### Order Service
+
+Places orders and publishes `OrderPlaced` events — through an outbox, not directly.
+
+```
+POST /api/v1/orders
+        │
+        ▼
+   OrderService.placeOrder()          ┌── one transaction ──┐
+        ├─ write to orders            │                     │
+        └─ write to outbox_messages   └─────────────────────┘
+        │
+        ▼  (background, polled)
+   OutboxPublisher  ──▶  Kafka
+```
+
+Writing to the database and publishing to Kafka are two systems with no shared
+transaction. A crash between them either loses the event or invents one, and no retry
+can tell you which happened. Writing the event into the same transaction as the order
+removes the question: both exist, or neither does.
+
+The trade-off is at-least-once delivery — a crash after publishing but before marking
+the row sends the event twice, so consumers must be idempotent.
+
+- **PostgreSQL + Flyway** — schema is versioned; Hibernate runs with `ddl-auto: validate`
+  and never touches the tables
+- **Partial index** on unpublished rows only, so the publisher's query stays cheap as
+  the table grows
+- **Testcontainers** — the end-to-end test runs against real PostgreSQL *and* real Kafka,
+  and asserts the event actually arrives
+
+Service documentation: [order-service/README.md](order-service/README.md)
+
 ---
 
 ## Target stack
@@ -125,11 +162,12 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Catalog persistence | MongoDB + Mongock | ✅ |
 | Testing | JUnit 5, Testcontainers, AssertJ | ✅ |
 | Containers | Docker, Docker Compose | ✅ |
-| Transactional persistence | PostgreSQL + Flyway | planned |
-| Async messaging | Apache Kafka | planned |
+| Transactional persistence | PostgreSQL + Flyway | ✅ |
+| Async messaging | Apache Kafka | ✅ |
+| Transactional Outbox | own implementation | ✅ |
 | Schema management | Confluent Schema Registry + Avro | planned |
 | Change data capture | Debezium | planned |
-| Distributed consistency | Transactional Outbox + Saga | planned |
+| Saga orchestration | | planned |
 | Search | Elasticsearch | planned |
 | Cache / locking / rate limiting | Redis | planned |
 | API gateway | Spring Cloud Gateway | planned |
@@ -153,16 +191,18 @@ docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
 ```bash
-mvn -pl catalog-service test
+mvn test
 ```
 
 ```bash
-mvn -pl catalog-service spring-boot:run
+mvn -pl catalog-service spring-boot:run   # http://localhost:8081
+mvn -pl order-service   spring-boot:run   # http://localhost:8082
 ```
 
-The service starts on `http://localhost:8081`; OpenAPI UI at `/swagger-ui.html`.
+OpenAPI UI at `/swagger-ui.html` on each service.
 
-Integration tests start their own MongoDB container, so Docker must be running.
+Integration tests start their own MongoDB, PostgreSQL and Kafka containers, so Docker
+must be running.
 
 ---
 
