@@ -18,7 +18,7 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   pattern matching, sealed types ile daha az boilerplate.
 - **Alternatif elenmesi:** Kotlin harika ama hedef ilanların çoğu "Java"; Go/Node
   ekosistem olgunluğunda (Spring) geride.
-- **Kurumsal karşılığı:** Trendyol/Hepsiburada/Ebebek backend'i büyük oranda Java.
+- **Kurumsal karşılığı:** Büyük ölçekli e-ticaret backend'lerinde Java baskın dil.
 
 ### Spring Boot 3.x
 - **Problem:** Servisleri hızlı, standart ve üretime hazır kurmak.
@@ -40,7 +40,7 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 - **Alternatif elenmesi:** RabbitMQ mükemmel bir **message broker** ama **event
   streaming** (kalıcılık, replay, log compaction, CDC hedefi) için Kafka daha uygun.
   *(Bkz. ADR-0003 — ikisinin farkı ve neden Kafka.)*
-- **Kurumsal karşılığı:** Trendyol, Getir, Sahibinden, Yemeksepeti'nde yaygın standart.
+- **Kurumsal karşılığı:** Yüksek hacimli e-ticaret ve pazaryeri sistemlerinde yaygın standart.
 
 ### Confluent Schema Registry + Apache Avro
 - **Problem:** Event şeması zamanla değişir. Üretici yeni alan eklerse eski tüketiciler
@@ -49,7 +49,7 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   merkezî tutup **backward/forward compatibility** kontrolü yapar. Üretici uyumsuz
   şema publish edemez.
 - **Alternatif:** Protobuf de iyi; Avro Kafka/Confluent ekosisteminde daha yerleşik.
-- **Kurumsal karşılığı:** Ebebek dâhil Confluent kullanan yerlerde tam da bu yığın.
+- **Kurumsal karşılığı:** Confluent platformunu kullanan kurumlarda standart yığın.
 
 ### Debezium (Change Data Capture)
 - **Problem:** "Dual-write" — DB'ye yaz + Kafka'ya yaz atomik değil (bkz. Architecture §4).
@@ -57,7 +57,7 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   taşır. Uygulama Kafka'ya hiç dokunmaz; **Transactional Outbox** deseniyle birlikte
   event kaybını/çiftlenmesini kökten çözer.
 - **Alternatif:** Uygulama içi "publish after commit" — race condition ve kayıp riski.
-- **Kurumsal karşılığı:** Trendyol/Hepsiburada/Getir CDC pipeline'larında yaygın.
+- **Kurumsal karşılığı:** Kurumsal CDC pipeline'larında yaygın tercih.
 
 ---
 
@@ -189,7 +189,7 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 - **Problem:** Kurumsal ölçek/deploy/otomatik iyileşme/otomatik ölçek.
 - **Neden:** K8s fiili orkestrasyon standardı; Helm ile chart'lar parametrize edilir
   (Deployment, Service, ConfigMap, Secret, Ingress, HPA). Lokal doğrulama için Kind.
-- **Kurumsal karşılığı:** "Spring Boot'u K8s'e nasıl deploy edersin?" mülakat klasiği.
+- **Kurumsal karşılığı:** Spring Boot servislerini K8s'e taşımak kurumsal standart iş akışı.
 
 ### GitHub Actions
 - **Problem:** Her commit otomatik build/test/tarama/imaj.

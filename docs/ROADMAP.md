@@ -7,15 +7,14 @@ kurumlarda "incremental delivery" (parça parça teslim) böyle yapılır.
 Her fazın altında:
 - **Neden** (bu faz hangi kurumsal problemi çözüyor / hangi yetkinliği gösteriyor)
 - **Ne inşa edilecek**
-- **Mülakatta karşılığı** (bu fazın sana kazandırdığı konuşma başlığı)
+- **Kazanım** (bu fazın ortaya koyduğu yetkinlik)
 
 ---
 
 ## Faz 0 — Temel & Dokümantasyon  ✅
 
-**Neden:** Bir lead'in ilk işi kod yazmak değil; kapsamı, mimariyi ve kararları
-netleştirmektir. "Neden bu teknoloji?" sorusuna yazılı cevap veremeyen bir aday
-lead olamaz.
+**Neden:** Kod yazmadan önce kapsam, mimari ve kararlar netleşmeli. "Neden bu
+teknoloji?" sorusunun yazılı bir cevabı yoksa, karar altı ay sonra savunulamaz.
 
 **Ne inşa edildi:**
 - Mono-repo iskeleti (Maven multi-module parent POM)
@@ -24,8 +23,8 @@ lead olamaz.
 - Lokal altyapı için Docker Compose (Postgres ile başlar, her fazda büyür)
 - `.gitignore`, `.editorconfig`, kod stili temeli
 
-**Mülakatta karşılığı:** "Projeyi ADR'lerle yönetiyorum; her mimari karar gerekçesiyle
-kayıtlı. Mono-repo + multi-module Maven ile bağımlılıkları merkezî yönetiyorum."
+**Kazanım:** Her mimari karar gerekçesiyle ADR olarak kayıtlı; bağımlılıklar
+mono-repo + multi-module Maven ile merkezî olarak yönetiliyor.
 
 ---
 
@@ -45,9 +44,10 @@ gerçek veritabanına karşı entegrasyon testi.
 - Çok aşamalı (multi-stage) **Dockerfile** (küçük, güvenli imaj)
 - Global hata yönetimi (RFC 7807 `ProblemDetail`)
 
-**Mülakatta karşılığı:** "Katalogu MongoDB'de document olarak modelledim çünkü ürün
-öznitelikleri kategoriye göre değişken; Mongock ile NoSQL migration'ı versiyonladım;
-Testcontainers ile gerçek Mongo'ya test yazdım; API-first ile OpenAPI sözleşmesi ürettim."
+**Kazanım:** Katalog MongoDB'de document olarak modellendi — ürün öznitelikleri
+kategoriye göre değiştiği için ilişkisel şema EAV anti-desenine zorluyordu. Mongock
+ile NoSQL migration'ları versiyonlandı, Testcontainers ile gerçek MongoDB'ye karşı
+test edildi, OpenAPI sözleşmesi API-first üretildi.
 > Not: İlişkisel dünya ve **Flyway** Faz 4'te gelir (Order/Payment/Inventory → Postgres),
 > böylece iki migration aracını (Mongock + Flyway) da göstermiş oluruz.
 
@@ -64,8 +64,8 @@ Testcontainers ile gerçek Mongo'ya test yazdım; API-first ile OpenAPI sözleş
 - Servislerde `resource-server` (JWT doğrulama, `@PreAuthorize`)
 - Compose'a Keycloak eklenir
 
-**Mülakatta karşılığı:** "Auth'u Keycloak'a devrettim; Gateway'de token doğrulanıp
-downstream servislere claim'ler taşınıyor; servisler stateless resource-server."
+**Kazanım:** Kimlik doğrulama Keycloak'a devredilir; token Gateway'de doğrulanıp
+claim'ler downstream servislere taşınır, servisler stateless resource-server olur.
 
 ---
 
@@ -86,8 +86,8 @@ anda yazma) ele alınmazsa veri tutarsız kalır.
   streams, Catalog) — aynı desen, iki farklı depo (ADR-0006)
 - Ortak `event-contracts` modülü (Avro şemaları tek yerde)
 
-**Mülakatta karşılığı:** "Dual-write problemini Transactional Outbox + Debezium CDC
-ile çözdüm; event'leri Avro + Schema Registry ile şemalayıp uyumluluğu garanti ettim."
+**Kazanım:** Dual-write problemi Transactional Outbox + Debezium CDC ile çözülür;
+event'ler Avro + Schema Registry ile şemalanıp geriye dönük uyumluluk garanti edilir.
 
 ---
 
@@ -105,8 +105,8 @@ dağıtık transaction (2PC) ölçeklenmez. Çözüm: **Saga** (telafi edici iş
 - İdempotent tüketici (aynı event iki kez işlenmez)
 - Durum makinesi (state machine) ile sipariş yaşam döngüsü
 
-**Mülakatta karşılığı:** "Dağıtık transaction yerine orchestration-based Saga
-kullandım; her adımın compensation'ını tanımlayıp idempotency ile tekrarları elimine ettim."
+**Kazanım:** Dağıtık transaction yerine orchestration-based Saga kullanılır; her
+adımın telafi (compensation) işlemi tanımlanır, idempotency ile tekrarlar etkisizleşir.
 
 ---
 
@@ -121,8 +121,8 @@ yapmak işkencedir. Ayrıca sık okunan veri her seferinde DB'ye gitmemeli.
 - Faceted search, filtreleme, sayfalama
 - **Redis**: sık okunan katalog verisi için cache, dağıtık **kilit**, **rate-limit**
 
-**Mülakatta karşılığı:** "Arama için CQRS okuma modeli kurdum; Kafka'dan beslenen
-Elasticsearch indeksi ile faceted search yaptım; Redis ile cache ve dağıtık kilit."
+**Kazanım:** Arama için CQRS okuma modeli kurulur; Kafka'dan beslenen Elasticsearch
+indeksiyle faceted search, Redis ile cache ve dağıtık kilit sağlanır.
 
 ---
 
@@ -137,9 +137,9 @@ sorusuna cevap veremezsen prod'da körsün. Üç ayak: **log, metrik, trace**.
 - **Prometheus** + **Grafana**: metrik toplama + dashboard'lar (RED/USE)
 - **Loki**: merkezî log; trace-id ile log korelasyonu
 
-**Mülakatta karşılığı:** "OTel ile uçtan uca trace context propagation sağladım;
-bir isteğin hangi serviste kaç ms harcadığını Jaeger'da görüyorum; Grafana'da
-RED metrikleriyle alarm kurdum."
+**Kazanım:** OpenTelemetry ile uçtan uca trace context propagation sağlanır; bir
+isteğin hangi serviste kaç ms harcadığı Jaeger'da izlenir; Grafana'da RED
+metrikleriyle alarm kurulur.
 
 ---
 
@@ -154,8 +154,8 @@ RED metrikleriyle alarm kurdum."
 - Redis tabanlı rate limiting (Gateway'de)
 - Gerçekten devreye girdiğini gösteren testler (hata enjeksiyonu)
 
-**Mülakatta karşılığı:** "Resilience4j ile circuit breaker + bulkhead uyguladım;
-Gateway'de rate-limit; downstream timeout'larda fallback ile graceful degradation."
+**Kazanım:** Resilience4j ile circuit breaker ve bulkhead uygulanır; Gateway'de
+rate limiting; downstream timeout'larda fallback ile graceful degradation.
 
 ---
 
@@ -171,8 +171,8 @@ derlenmeli, test edilmeli, taranmalı ve imaj üretmeli.
   - Docker imajı build & (opsiyonel) GHCR'a push
 - Matrix build, cache, PR gate
 
-**Mülakatta karşılığı:** "Her PR'da Testcontainers testleri, bağımlılık güvenlik
-taraması ve imaj build eden bir Actions pipeline'ı var; kırmızı build merge edilemez."
+**Kazanım:** Her PR'da Testcontainers testleri, bağımlılık güvenlik taraması ve imaj
+build eden bir Actions pipeline'ı çalışır; kırmızı build merge edilemez.
 
 ---
 
@@ -187,8 +187,8 @@ taraması ve imaj build eden bir Actions pipeline'ı var; kırmızı build merge
 - Liveness/readiness probe'ları (Spring Actuator)
 - **Kind/Minikube** ile lokal cluster üzerinde uçtan uca çalıştırma
 
-**Mülakatta karşılığı:** "Servisleri Helm chart'larıyla parametrize ettim;
-readiness/liveness probe, HPA ve resource limit'lerle K8s'e deploy edilebilir hâle getirdim."
+**Kazanım:** Servisler Helm chart'larıyla parametrize edilir; readiness/liveness
+probe, HPA ve resource limit'leriyle K8s'e deploy edilir.
 
 ---
 

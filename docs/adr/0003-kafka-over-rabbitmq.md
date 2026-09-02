@@ -36,5 +36,5 @@ ile yönetilir.
   Kafka'dan beslenir; Debezium ile CDC doğal; partition ile ölçek.
 - **Olumsuz / ödünler:** Kafka operasyonel olarak RabbitMQ'dan ağırdır (broker,
   Zookeeper/KRaft, Schema Registry). Lokalde Compose ile, prod'da K8s ile yönetilir.
-- **Kurumsal karşılığı:** Bu ayrımı ("Kafka mı RabbitMQ mı, neden?") mülakatta
-  net açıklayabilmek, mid→senior ayrımının klasik göstergesidir.
+- **Kurumsal karşılığı:** "Kafka mı RabbitMQ mı?" ayrımı, mesajlaşma omurgası seçen
+  her ekibin verdiği ilk karardır; gerekçesi yazılı olmadığında tartışma tekrar eder.

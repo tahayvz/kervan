@@ -4,9 +4,8 @@ Bir **ADR**, önemli bir mimari kararı; **bağlamı**, **verilen kararı**, **d
 alternatifleri** ve **sonuçlarını** ile kalıcı olarak kaydeder.
 
 **Neden tutuyoruz?** 6 ay sonra "biz bunu neden böyle yapmıştık?" sorusunun cevabı
-kaybolmasın diye. Bir lead için ADR'ler, teknik kararları savunulabilir ve
-izlenebilir kılan en güçlü araçtır. Mülakatta "neden Kafka, neden RabbitMQ değil?"
-sorusuna işaret edebileceğin yazılı bir kanıttır.
+kaybolmasın diye. ADR'ler teknik kararları savunulabilir ve izlenebilir kılar;
+kararı veren kişi ekipten ayrıldığında gerekçe onunla birlikte gitmez.
 
 ## Durumlar
 - **Proposed** — önerildi, tartışılıyor
