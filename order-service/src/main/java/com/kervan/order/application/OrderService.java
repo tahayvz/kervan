@@ -1,0 +1,108 @@
+package com.kervan.order.application;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kervan.order.application.command.PlaceOrderCommand;
+import com.kervan.order.application.exception.OrderNotFoundException;
+import com.kervan.order.domain.event.OrderPlaced;
+import com.kervan.order.domain.model.Money;
+import com.kervan.order.domain.model.Order;
+import com.kervan.order.domain.model.OrderLine;
+import com.kervan.order.domain.model.OutboxMessage;
+import com.kervan.order.domain.port.OrderRepository;
+import com.kervan.order.domain.port.OutboxRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Currency;
+import java.util.List;
+
+/**
+ * Sipariş use-case'leri.
+ * <p>
+ * {@link #placeOrder} içindeki iki yazma işlemi (sipariş + outbox kaydı) aynı
+ * transaction'dadır. Bu, servisin en önemli tek satırlık kuralıdır: olay ile sipariş
+ * ya birlikte var olur ya hiç olmaz.
+ */
+@Service
+public class OrderService {
+
+    private static final String AGGREGATE_TYPE = "Order";
+
+    private final OrderRepository orderRepository;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
+    private final Clock clock;
+
+    public OrderService(OrderRepository orderRepository,
+                        OutboxRepository outboxRepository,
+                        ObjectMapper objectMapper,
+                        Clock clock) {
+        this.orderRepository = orderRepository;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
+        this.clock = clock;
+    }
+
+    /**
+     * Siparişi ve ona ait {@code OrderPlaced} olayını tek transaction'da yazar.
+     * <p>
+     * Olay burada Kafka'ya gönderilmez; yalnızca outbox tablosuna yazılır. Taşıma işi
+     * {@code OutboxPublisher}'a aittir. Gerekçe: {@link OutboxMessage}.
+     */
+    @Transactional
+    public Order placeOrder(PlaceOrderCommand command) {
+        Instant now = clock.instant();
+        Currency currency = Currency.getInstance(command.currency());
+
+        List<OrderLine> lines = command.lines().stream()
+                .map(line -> new OrderLine(
+                        line.productId(),
+                        line.sku(),
+                        line.quantity(),
+                        new Money(line.unitPrice(), currency)))
+                .toList();
+
+        Order saved = orderRepository.save(Order.place(command.customerId(), lines, now));
+        outboxRepository.save(toOutboxMessage(saved, now));
+
+        return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public Order getOrder(String orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+    }
+
+    private OutboxMessage toOutboxMessage(Order order, Instant now) {
+        OrderPlaced event = new OrderPlaced(
+                order.id(),
+                order.customerId(),
+                order.totalAmount().amount(),
+                order.totalAmount().currency().getCurrencyCode(),
+                order.lines().stream()
+                        .map(line -> new OrderPlaced.Item(
+                                line.productId(),
+                                line.sku(),
+                                line.quantity(),
+                                line.unitPrice().amount()))
+                        .toList(),
+                order.placedAt());
+
+        return OutboxMessage.pending(
+                AGGREGATE_TYPE, order.id(), OrderPlaced.EVENT_TYPE, serialize(event), now);
+    }
+
+    private String serialize(OrderPlaced event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            // Kendi ürettiğimiz bir kaydı çeviremiyorsak bu bir programlama hatasıdır;
+            // yutup siparişi olaysız bırakmaktansa transaction'ı geri almak doğrudur.
+            throw new IllegalStateException("OrderPlaced serialize edilemedi", e);
+        }
+    }
+}

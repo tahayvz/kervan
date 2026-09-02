@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: order-service
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/orders}
+    username: ${SPRING_DATASOURCE_USERNAME:kervan}
+    password: ${SPRING_DATASOURCE_PASSWORD:kervan}
+
+  jpa:
+    hibernate:
+      # Şema Flyway'in sorumluluğunda; Hibernate'in tabloya dokunmasına izin verilmez.
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # Broker'ların tamamı yazmayı onaylamadan başarı sayma; outbox'ın "gönderildi"
+      # işareti ancak gerçekten dayanıklı yazımdan sonra konmalı.
+      acks: all
+
+kervan:
+  outbox:
+    topic: kervan.orders.events
+    poll-interval-ms: 1000
+    batch-size: 100
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
