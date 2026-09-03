@@ -159,7 +159,7 @@ rate limiting; downstream timeout'larda fallback ile graceful degradation.
 
 ---
 
-## Faz 8 — CI/CD (GitHub Actions)
+## Faz 8 — CI/CD (GitHub Actions)  ✅ (kısmi: CI tamam, CD planlı)
 
 **Neden:** "Bende çalışıyordu" bir mühendislik cevabı değildir. Her commit otomatik
 derlenmeli, test edilmeli, taranmalı ve imaj üretmeli.

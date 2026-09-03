@@ -1,5 +1,11 @@
 # Kervan Commerce Platform
 
+[![CI](https://github.com/tahayvz/kervan/actions/workflows/ci.yml/badge.svg)](https://github.com/tahayvz/kervan/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/tahayvz/kervan/actions/workflows/codeql.yml/badge.svg)](https://github.com/tahayvz/kervan/actions/workflows/codeql.yml)
+[![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 > An event-driven e-commerce backend built as a set of Spring Boot microservices,
 > using only open-source components.
 
@@ -42,7 +48,7 @@ marked done unless its code and tests are in this repository.
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
-| 8 | CI/CD with GitHub Actions | Planned |
+| 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
 | 9 | Kubernetes + Helm | Planned |
 
 Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -175,7 +181,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Resilience | Resilience4j | planned |
 | Observability | OpenTelemetry, Prometheus, Grafana, Jaeger, Loki | planned |
 | Orchestration | Kubernetes + Helm | planned |
-| CI/CD | GitHub Actions | planned |
+| CI | GitHub Actions + CodeQL | ✅ |
 
 Rationale for each choice, including the alternatives that were rejected:
 [docs/TECH-RADAR.md](docs/TECH-RADAR.md)
@@ -191,7 +197,7 @@ docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
 ```bash
-mvn test
+mvn test     # 78 tests: 13 catalog + 65 order
 ```
 
 ```bash
