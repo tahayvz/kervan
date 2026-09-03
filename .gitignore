@@ -40,3 +40,9 @@ volumes/
 .surefire/
 coverage/
 *.exec
+
+# --- Kişisel çalışma çıktıları (repoya girmez) ---
+# Projeyi tek dosyada toplayan yerel paketler; repo içeriğinin eski kopyalarını
+# taşırlar ve yayınlanmamalıdırlar.
+kervan-catalog.md
+kervan-kavramlar.md
