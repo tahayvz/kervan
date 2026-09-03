@@ -31,6 +31,10 @@ kervan:
     topic: kervan.orders.events
     poll-interval-ms: 1000
     batch-size: 100
+    # Bu sayıya ulaşan kayıt kenara alınır; kuyruğun başını tıkamaz.
+    max-attempts: 5
+    # Transaction'ın açık kalabileceği süreyi sınırlar (bkz. OutboxPublisher).
+    send-timeout: 5s
 
 server:
   port: 8082

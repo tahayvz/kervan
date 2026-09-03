@@ -75,12 +75,12 @@ public class Order {
     /**
      * Durumu değiştirir.
      *
-     * @throws IllegalStateException geçiş {@link OrderStatus} tablosunda tanımlı değilse
+     * @throws InvalidStatusTransitionException geçiş {@link OrderStatus} tablosunda
+     *                                          tanımlı değilse
      */
     public void changeStatus(OrderStatus next, Instant now) {
         if (!status.canTransitionTo(next)) {
-            throw new IllegalStateException(
-                    "Geçersiz durum geçişi: " + status + " -> " + next);
+            throw new InvalidStatusTransitionException(status, next);
         }
         this.status = next;
         this.updatedAt = now;

@@ -16,12 +16,19 @@ public interface OutboxRepository {
     OutboxMessage save(OutboxMessage message);
 
     /**
-     * Henüz yayınlanmamış kayıtları en eskiden yeniye döner.
+     * Gönderilmeyi bekleyen kayıtları kilitleyerek okur; çağıran transaction bitene
+     * kadar başka bir kopya aynı satırları almaz.
      *
-     * @param limit tek turda taşınacak azami kayıt; yayıncının bir seferde tüm tabloyu
-     *              belleğe almasını engeller
+     * @param limit       tek turda taşınacak azami kayıt
+     * @param maxAttempts bu sayıya ulaşmış kayıtlar kenara alınır ve dönülmez
      */
+    List<OutboxMessage> lockDeliverable(int limit, int maxAttempts);
+
+    /** Yalnızca okuma — izleme ve testler için; kilit almaz. */
     List<OutboxMessage> findUnpublished(int limit);
 
     void markPublished(String id, Instant publishedAt);
+
+    /** Başarısız denemeyi sayaca işler; sınıra ulaşan kayıt bir daha denenmez. */
+    void recordFailedAttempt(String id, Instant at, String error);
 }

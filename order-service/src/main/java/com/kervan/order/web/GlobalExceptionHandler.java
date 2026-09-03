@@ -1,6 +1,7 @@
 package com.kervan.order.web;
 
 import com.kervan.order.application.exception.OrderNotFoundException;
+import com.kervan.order.domain.model.InvalidStatusTransitionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -51,8 +52,17 @@ class GlobalExceptionHandler {
         return problem;
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    ProblemDetail handleInvalidState(IllegalStateException e) {
+    /**
+     * Yalnızca gerçek durum çakışmaları 409 döner.
+     * <p>
+     * Daha önce burada {@code IllegalStateException} yakalanıyordu; bu, sunucu tarafı
+     * hatalarını da (örneğin olay serialize edilemediğinde) istemciye "çakışma" diye
+     * bildiriyordu. Öyle bir yanıt alan istemci tekrar denemez ve 5xx üzerine kurulu
+     * alarmlar sessiz kalırdı. Artık o tür hatalar Spring'in varsayılan 500 yoluna
+     * düşüyor.
+     */
+    @ExceptionHandler(InvalidStatusTransitionException.class)
+    ProblemDetail handleInvalidTransition(InvalidStatusTransitionException e) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, e.getMessage());
         problem.setTitle("İşlem mevcut durumda yapılamaz");

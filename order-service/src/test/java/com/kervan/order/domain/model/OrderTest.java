@@ -85,7 +85,7 @@ class OrderTest {
         Order order = Order.place("c-1", List.of(line("A", 1, "10.00")), NOW);
 
         assertThatThrownBy(() -> order.changeStatus(OrderStatus.DELIVERED, NOW))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(InvalidStatusTransitionException.class)
                 .hasMessageContaining("Geçersiz durum geçişi");
     }
 
@@ -94,7 +94,7 @@ class OrderTest {
         Order order = Order.place("c-1", List.of(line("A", 1, "10.00")), NOW);
 
         assertThatThrownBy(() -> order.changeStatus(OrderStatus.DELIVERED, NOW))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(InvalidStatusTransitionException.class);
 
         assertThat(order.status()).isEqualTo(OrderStatus.PLACED);
     }

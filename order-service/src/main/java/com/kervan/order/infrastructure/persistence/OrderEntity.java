@@ -8,7 +8,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import org.springframework.data.domain.Persistable;
 import com.kervan.order.domain.model.OrderStatus;
 
 import java.math.BigDecimal;
@@ -25,7 +29,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "orders")
-class OrderEntity {
+class OrderEntity implements Persistable<UUID> {
 
     @Id
     private UUID id;
@@ -53,6 +57,14 @@ class OrderEntity {
             orphanRemoval = true, fetch = FetchType.EAGER)
     private List<OrderLineEntity> lines = new ArrayList<>();
 
+    /**
+     * Kimlik uygulamada üretiliyor. Bunu söylemezsek Spring Data kaydı "mevcut" sayar,
+     * her INSERT'ten önce kesin ıskalayacak bir SELECT çalıştırır ve sipariş oluşturma
+     * yolunu gereksiz yere iki katına çıkarır.
+     */
+    @Transient
+    private boolean isNew = true;
+
     protected OrderEntity() {
         // JPA için
     }
@@ -73,8 +85,20 @@ class OrderEntity {
         line.setOrder(this);
     }
 
-    UUID getId() {
+    @Override
+    public UUID getId() {
         return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
     }
 
     String getCustomerId() {

@@ -24,6 +24,28 @@ Bedeli: teslimat **en az bir kez** (at-least-once). Yayınlandıktan sonra işar
 önce çökme olursa aynı olay tekrar gider — bu yüzden tüketiciler idempotent olmalıdır;
 outbox kaydının `id`'si tekrarları elemek için sabit anahtardır.
 
+## Çok kopyalı çalışma ve tıkanmama
+
+Servis birden fazla kopya hâlinde çalıştığında iki sorun doğar; ikisi de çözüldü:
+
+| Sorun | Çözüm |
+|---|---|
+| İki kopya aynı satırları okuyup olayı iki kez yayınlar | `FOR UPDATE SKIP LOCKED` — her kopya farklı satırları kilitler, birbirini beklemez |
+| Kalıcı olarak gönderilemeyen bir kayıt kuyruğun başını tıkar | `attempts` sayacı; sınıra ulaşan kayıt sorgunun dışında kalır, kuyruk akmaya devam eder |
+
+Gönderim `send-timeout` ile sınırlıdır. Zaman aşımsız bekleme, broker erişilemezken
+transaction'ı ve veritabanı bağlantısını dakikalarca açık tutar; bu da Kafka kesintisini
+sipariş alma yoluna bulaştırırdı — outbox'ın önlemek için var olduğu şeyin ta kendisi.
+
+Kenara alınmış kayıtları bulmak için:
+
+```sql
+SELECT id, aggregate_id, attempts, last_error
+FROM outbox_messages
+WHERE published_at IS NULL AND attempts >= 5
+ORDER BY last_attempt_at DESC;
+```
+
 Karar kaydı: [ADR-0004](../docs/adr/0004-transactional-outbox-debezium.md)
 
 ## Akış
@@ -97,9 +119,10 @@ Servis `http://localhost:8082`, OpenAPI arayüzü `/swagger-ui.html`.
 mvn -pl order-service test
 ```
 
-58 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
-sipariş toplamı), use-case testleri (mock port'larla), ve gerçek PostgreSQL + Kafka
-container'larına karşı çalışan uçtan uca akış testi — siparişin outbox üzerinden
+65 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
+sipariş toplamı), use-case testleri (mock port'larla), yayıncı testleri (anahtarlama,
+başarısız gönderimde işaretlememe, deneme sayacı, turun durması) ve gerçek PostgreSQL +
+Kafka container'larına karşı çalışan uçtan uca akış testi — siparişin outbox üzerinden
 Kafka'ya ulaştığını ve yayınlandı olarak işaretlendiğini doğrular.
 
 Entegrasyon testleri Testcontainers kullanır; Docker çalışıyor olmalıdır.

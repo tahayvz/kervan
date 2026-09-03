@@ -12,6 +12,9 @@ import java.util.UUID;
 @Component
 class OutboxRepositoryAdapter implements OutboxRepository {
 
+    /** Hata metni sütuna sığsın; asıl yığın izi zaten loglanıyor. */
+    private static final int MAX_ERROR_LENGTH = 500;
+
     private final SpringDataOutboxRepository repository;
 
     OutboxRepositoryAdapter(SpringDataOutboxRepository repository) {
@@ -35,6 +38,14 @@ class OutboxRepositoryAdapter implements OutboxRepository {
     }
 
     @Override
+    public List<OutboxMessage> lockDeliverable(int limit, int maxAttempts) {
+        return repository.lockDeliverable(maxAttempts, Limit.of(limit))
+                .stream()
+                .map(OutboxRepositoryAdapter::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<OutboxMessage> findUnpublished(int limit) {
         return repository.findByPublishedAtIsNullOrderByOccurredAtAsc(Limit.of(limit))
                 .stream()
@@ -44,15 +55,19 @@ class OutboxRepositoryAdapter implements OutboxRepository {
 
     @Override
     public void markPublished(String id, Instant publishedAt) {
-        repository.findById(UUID.fromString(id)).ifPresent(entity ->
-                repository.save(new OutboxEntity(
-                        entity.getId(),
-                        entity.getAggregateType(),
-                        entity.getAggregateId(),
-                        entity.getEventType(),
-                        entity.getPayload(),
-                        entity.getOccurredAt(),
-                        publishedAt)));
+        repository.markPublished(UUID.fromString(id), publishedAt);
+    }
+
+    @Override
+    public void recordFailedAttempt(String id, Instant at, String error) {
+        repository.recordFailedAttempt(UUID.fromString(id), at, truncate(error));
+    }
+
+    private static String truncate(String error) {
+        if (error == null) {
+            return null;
+        }
+        return error.length() <= MAX_ERROR_LENGTH ? error : error.substring(0, MAX_ERROR_LENGTH);
     }
 
     private static OutboxMessage toDomain(OutboxEntity entity) {

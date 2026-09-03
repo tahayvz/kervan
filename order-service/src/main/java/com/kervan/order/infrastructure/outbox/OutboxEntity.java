@@ -3,14 +3,18 @@ package com.kervan.order.infrastructure.outbox;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import org.springframework.data.domain.Persistable;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
 @Table(name = "outbox_messages")
-class OutboxEntity {
+class OutboxEntity implements Persistable<UUID> {
 
     @Id
     private UUID id;
@@ -33,6 +37,23 @@ class OutboxEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @Column(nullable = false)
+    private int attempts;
+
+    @Column(name = "last_attempt_at")
+    private Instant lastAttemptAt;
+
+    @Column(name = "last_error", columnDefinition = "TEXT")
+    private String lastError;
+
+    /**
+     * Kimlik uygulamada üretildiği için Spring Data, kaydı "mevcut" sanıp her
+     * INSERT öncesi gereksiz bir SELECT çalıştırırdı. {@link Persistable} ile
+     * yeni olup olmadığını açıkça söylüyoruz.
+     */
+    @Transient
+    private boolean isNew = true;
+
     protected OutboxEntity() {
         // JPA için
     }
@@ -48,8 +69,24 @@ class OutboxEntity {
         this.publishedAt = publishedAt;
     }
 
-    UUID getId() {
+    @Override
+    public UUID getId() {
         return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
+
+    int getAttempts() {
+        return attempts;
     }
 
     String getAggregateType() {

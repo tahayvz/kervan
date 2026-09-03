@@ -11,22 +11,41 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Outbox tablosundaki kayıtları Kafka'ya taşır.
  *
  * <p>Sipariş yazan transaction burayı beklemez; bu sınıf arka planda periyodik çalışır.
  * Kafka bir süre erişilemez olsa bile sipariş alınmaya devam eder, olaylar tabloda
- * birikir ve bağlantı geri geldiğinde sırayla gönderilir.
+ * birikir ve bağlantı geri geldiğinde gönderilir.
  *
- * <p><b>Sıralama:</b> Kayıtlar Kafka'ya {@code aggregateId} anahtarıyla yazılır. Aynı
- * siparişin olayları aynı partition'a düşer, dolayısıyla o sipariş için sıra korunur.
- * Farklı siparişler arasında genel bir sıra garantisi yoktur ve gerekmez.
+ * <h2>Aynı olayın iki kez gitmemesi</h2>
+ * Kayıtlar {@code FOR UPDATE SKIP LOCKED} ile kilitlenerek okunur. Servisin birden
+ * fazla kopyası çalıştığında her kopya farklı satırları alır; aynı olay iki kez
+ * yayınlanmaz.
  *
- * <p><b>Hata durumu:</b> Bir kayıt gönderilemezse işaretlenmez ve bir sonraki turda
- * tekrar denenir. Turda kalan kayıtlara devam edilmez; sıra bozulmasın diye döngü
- * durur.
+ * <h2>Tıkanmama</h2>
+ * Gönderilemeyen bir kaydın deneme sayacı artar. Sayaç sınıra ulaşınca kayıt sorgunun
+ * dışında kalır: kuyruk akmaya devam eder, sorunlu kayıt incelenmek üzere tabloda
+ * durur. Aksi hâlde tek bir bozuk mesaj (örneğin broker sınırını aşan bir payload)
+ * arkasındaki tüm olayları süresiz bloklardı.
+ *
+ * <h2>Transaction süresi</h2>
+ * Gönderim {@code sendTimeout} ile sınırlıdır. Zaman aşımı olmadan {@code get()}
+ * çağırmak, broker erişilemezken transaction'ı ve veritabanı bağlantısını dakikalarca
+ * açık tutardı; bu, Kafka kesintisini sipariş alma yoluna bulaştırırdı — outbox'ın
+ * önlemek için var olduğu şeyin ta kendisi.
+ *
+ * <p>Sıralama: Kafka'ya {@code aggregateId} anahtarıyla yazılır, aynı siparişin
+ * olayları aynı partition'a düşer. Bir gönderim başarısız olduğunda tur sonlandırılır
+ * ki o siparişin sonraki olayları öne geçmesin.
+ *
+ * <p>Teslimat <b>en az bir kez</b>'dir: işaretleme öncesi çökme aynı olayı tekrar
+ * gönderir. Tüketiciler idempotent olmalıdır ({@link OutboxMessage}).
  */
 @Component
 class OutboxPublisher {
@@ -38,50 +57,65 @@ class OutboxPublisher {
     private final Clock clock;
     private final String topic;
     private final int batchSize;
+    private final int maxAttempts;
+    private final Duration sendTimeout;
 
     OutboxPublisher(OutboxRepository outboxRepository,
                     KafkaTemplate<String, String> kafkaTemplate,
                     Clock clock,
                     @Value("${kervan.outbox.topic}") String topic,
-                    @Value("${kervan.outbox.batch-size}") int batchSize) {
+                    @Value("${kervan.outbox.batch-size}") int batchSize,
+                    @Value("${kervan.outbox.max-attempts}") int maxAttempts,
+                    @Value("${kervan.outbox.send-timeout}") Duration sendTimeout) {
         this.outboxRepository = outboxRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.clock = clock;
         this.topic = topic;
         this.batchSize = batchSize;
+        this.maxAttempts = maxAttempts;
+        this.sendTimeout = sendTimeout;
     }
 
     @Scheduled(fixedDelayString = "${kervan.outbox.poll-interval-ms}")
     @Transactional
     public void publishPending() {
-        List<OutboxMessage> pending = outboxRepository.findUnpublished(batchSize);
-        if (pending.isEmpty()) {
-            return;
-        }
+        List<OutboxMessage> deliverable = outboxRepository.lockDeliverable(batchSize, maxAttempts);
 
-        for (OutboxMessage message : pending) {
+        for (OutboxMessage message : deliverable) {
             if (!publish(message)) {
                 break;
             }
         }
     }
 
-    /** @return gönderim başarılıysa true; false dönerse tur sonlandırılır */
+    /** @return gönderim başarılıysa true; false dönerse bu tur sonlandırılır */
     private boolean publish(OutboxMessage message) {
         try {
             kafkaTemplate.send(topic, message.aggregateId(), message.payload())
-                    .get();   // gönderimin gerçekten kabul edildiğini görmeden işaretleme
+                    .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
+
             outboxRepository.markPublished(message.id(), clock.instant());
             log.debug("Outbox kaydı yayınlandı: id={} type={}", message.id(), message.eventType());
             return true;
+
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Outbox yayını kesildi: id={}", message.id());
             return false;
+
+        } catch (TimeoutException e) {
+            recordFailure(message, "Gönderim " + sendTimeout.toMillis() + " ms içinde tamamlanmadı");
+            return false;
+
         } catch (Exception e) {
-            // İşaretlemiyoruz: kayıt tabloda kalır, bir sonraki turda tekrar denenir.
-            log.warn("Outbox kaydı yayınlanamadı, tekrar denenecek: id={}", message.id(), e);
+            recordFailure(message, e.getMessage());
             return false;
         }
+    }
+
+    private void recordFailure(OutboxMessage message, String reason) {
+        outboxRepository.recordFailedAttempt(message.id(), clock.instant(), reason);
+        log.warn("Outbox kaydı yayınlanamadı (sınır: {} deneme): id={} sebep={}",
+                maxAttempts, message.id(), reason);
     }
 }
