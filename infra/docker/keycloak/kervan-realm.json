@@ -1,0 +1,38 @@
+{
+  "realm": "kervan",
+  "enabled": true,
+  "_comment": "YALNIZCA LOKAL GELISTIRME. Buradaki kullanici ve parolalar acikca sahtedir ve yalnizca docker compose ortaminda calisir. Uretimde realm elle ya da IaC ile kurulur; bu dosya oraya kopyalanmaz.",
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      { "name": "CUSTOMER", "description": "Kendi siparislerini olusturabilir ve okuyabilir" },
+      { "name": "ADMIN", "description": "Tum siparisleri okuyabilir" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "kervan-cli",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "_comment": "Direct access grant yalnizca lokal denemeler icin acildi; uretimde authorization code + PKCE kullanilir."
+    }
+  ],
+  "users": [
+    {
+      "username": "musteri",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [ { "type": "password", "value": "musteri", "temporary": false } ],
+      "realmRoles": [ "CUSTOMER" ]
+    },
+    {
+      "username": "yonetici",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [ { "type": "password", "value": "yonetici", "temporary": false } ],
+      "realmRoles": [ "ADMIN" ]
+    }
+  ]
+}

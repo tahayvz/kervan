@@ -53,7 +53,7 @@ test edildi, OpenAPI sözleşmesi API-first üretildi.
 
 ---
 
-## Faz 2 — API Gateway + Kimlik (Keycloak)
+## Faz 2 — API Gateway + Kimlik (Keycloak)  · 2a ✅
 
 **Neden:** Kurumsal sistemlerde her servis kendi auth'unu yazmaz. Merkezî bir
 **kimlik sağlayıcı** (Keycloak) ve tek giriş noktası (**Gateway**) olur.

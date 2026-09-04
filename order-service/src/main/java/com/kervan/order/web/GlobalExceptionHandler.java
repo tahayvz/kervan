@@ -1,5 +1,6 @@
 package com.kervan.order.web;
 
+import com.kervan.order.application.exception.OrderAccessDeniedException;
 import com.kervan.order.application.exception.OrderNotFoundException;
 import com.kervan.order.domain.model.InvalidStatusTransitionException;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,13 @@ class GlobalExceptionHandler {
     ProblemDetail handleNotFound(OrderNotFoundException e) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
         problem.setTitle("Sipariş bulunamadı");
+        return problem;
+    }
+
+    @ExceptionHandler(OrderAccessDeniedException.class)
+    ProblemDetail handleAccessDenied(OrderAccessDeniedException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
+        problem.setTitle("Erişim reddedildi");
         return problem;
     }
 

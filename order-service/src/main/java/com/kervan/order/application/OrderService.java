@@ -3,8 +3,10 @@ package com.kervan.order.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kervan.order.application.command.PlaceOrderCommand;
+import com.kervan.order.application.exception.OrderAccessDeniedException;
 import com.kervan.order.application.exception.OrderNotFoundException;
 import com.kervan.order.domain.event.OrderPlaced;
+import com.kervan.order.domain.model.Caller;
 import com.kervan.order.domain.model.Money;
 import com.kervan.order.domain.model.Order;
 import com.kervan.order.domain.model.OrderLine;
@@ -53,7 +55,7 @@ public class OrderService {
      * {@code OutboxPublisher}'a aittir. Gerekçe: {@link OutboxMessage}.
      */
     @Transactional
-    public Order placeOrder(PlaceOrderCommand command) {
+    public Order placeOrder(PlaceOrderCommand command, Caller caller) {
         Instant now = clock.instant();
         Currency currency = Currency.getInstance(command.currency());
 
@@ -65,16 +67,29 @@ public class OrderService {
                         new Money(line.unitPrice(), currency)))
                 .toList();
 
-        Order saved = orderRepository.save(Order.place(command.customerId(), lines, now));
+        // Sipariş sahibi token'dan alınır, istek gövdesinden değil. Aksi hâlde bir
+        // müşteri başka bir müşterinin adına sipariş oluşturabilirdi.
+        Order saved = orderRepository.save(Order.place(caller.userId(), lines, now));
         outboxRepository.save(toOutboxMessage(saved, now));
 
         return saved;
     }
 
+    /**
+     * Siparişi döner. Yönetici her siparişi görebilir; müşteri yalnızca kendisininkini.
+     *
+     * @throws OrderNotFoundException     sipariş yoksa
+     * @throws OrderAccessDeniedException sipariş var ama çağıranın değilse
+     */
     @Transactional(readOnly = true)
-    public Order getOrder(String orderId) {
-        return orderRepository.findById(orderId)
+    public Order getOrder(String orderId, Caller caller) {
+        Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        if (!caller.isAdmin() && !caller.owns(order)) {
+            throw new OrderAccessDeniedException(orderId);
+        }
+        return order;
     }
 
     private OutboxMessage toOutboxMessage(Order order, Instant now) {

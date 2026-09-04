@@ -6,7 +6,7 @@
 # tek Postgres instance içinde ayrı DB'ler açarak bunu simüle ediyoruz; prod'da ayrı olur.
 #
 # Sonraki fazlarda bu dosya büyüyecek:
-#   Faz 2 → Keycloak
+#   Faz 2 → Keycloak (eklendi)
 #   Faz 3 → Kafka (eklendi) + Schema Registry + Debezium (Kafka Connect; Mongo change
 #           streams için Mongo replica set moduna alınacak)
 #   Faz 5 → Elasticsearch + Redis
@@ -90,6 +90,28 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  # Kimlik saglayici — ADR-0001. order-service token uretmez, yalnizca dogrular.
+  # dev modunda calisir: kalici depo yok, realm her acilista dosyadan yuklenir.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: kervan-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Lokal gelistirme kimlik bilgileri; uretimde asla boyle kullanilmaz.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
     restart: unless-stopped
 
 volumes:

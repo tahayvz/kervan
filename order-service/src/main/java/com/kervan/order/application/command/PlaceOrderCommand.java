@@ -9,7 +9,7 @@ import java.util.List;
  * Web DTO'su değildir. Böylece bir Kafka tüketicisi ya da zamanlanmış iş de aynı
  * use-case'i, HTTP'ye ait bir tip üretmek zorunda kalmadan çağırabilir.
  */
-public record PlaceOrderCommand(String customerId, String currency, List<Line> lines) {
+public record PlaceOrderCommand(String currency, List<Line> lines) {
 
     public record Line(String productId, String sku, int quantity, BigDecimal unitPrice) {
     }

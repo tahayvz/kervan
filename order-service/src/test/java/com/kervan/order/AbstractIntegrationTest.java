@@ -1,6 +1,8 @@
 package com.kervan.order;
 
+import com.kervan.order.security.TestJwtSupport;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
@@ -15,6 +17,7 @@ import org.testcontainers.utility.DockerImageName;
  * Kafka üreticisinin gerçekten çalıştığını doğrular.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(TestJwtSupport.class)
 public abstract class AbstractIntegrationTest {
 
     protected static final PostgreSQLContainer<?> POSTGRES =

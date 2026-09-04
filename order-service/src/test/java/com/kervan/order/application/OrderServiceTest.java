@@ -2,7 +2,9 @@ package com.kervan.order.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kervan.order.application.command.PlaceOrderCommand;
+import com.kervan.order.application.exception.OrderAccessDeniedException;
 import com.kervan.order.application.exception.OrderNotFoundException;
+import com.kervan.order.domain.model.Caller;
 import com.kervan.order.domain.model.Order;
 import com.kervan.order.domain.model.OutboxMessage;
 import com.kervan.order.domain.port.OrderRepository;
@@ -31,6 +33,7 @@ import static org.mockito.Mockito.when;
 class OrderServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-01-15T10:00:00Z");
+    private static final Caller CUSTOMER = Caller.customer("c-1");
 
     private OrderRepository orderRepository;
     private OutboxRepository outboxRepository;
@@ -48,7 +51,7 @@ class OrderServiceTest {
     }
 
     private PlaceOrderCommand command() {
-        return new PlaceOrderCommand("c-1", "TRY", List.of(
+        return new PlaceOrderCommand("TRY", List.of(
                 new PlaceOrderCommand.Line("p-1", "SKU-1", 2, new BigDecimal("100.00"))));
     }
 
@@ -66,7 +69,7 @@ class OrderServiceTest {
     void placeOrder_shouldPersistOrder() {
         repositoryAssignsId("order-1");
 
-        Order result = orderService.placeOrder(command());
+        Order result = orderService.placeOrder(command(), CUSTOMER);
 
         assertThat(result.id()).isEqualTo("order-1");
         assertThat(result.totalAmount().amount()).isEqualByComparingTo("200.00");
@@ -76,7 +79,7 @@ class OrderServiceTest {
     void placeOrder_shouldWriteOutboxMessageForTheSavedOrder() {
         repositoryAssignsId("order-1");
 
-        orderService.placeOrder(command());
+        orderService.placeOrder(command(), CUSTOMER);
 
         ArgumentCaptor<OutboxMessage> captor = ArgumentCaptor.forClass(OutboxMessage.class);
         verify(outboxRepository).save(captor.capture());
@@ -93,7 +96,7 @@ class OrderServiceTest {
     void placeOrder_shouldSerialiseEventPayloadWithOrderDetails() {
         repositoryAssignsId("order-1");
 
-        orderService.placeOrder(command());
+        orderService.placeOrder(command(), CUSTOMER);
 
         ArgumentCaptor<OutboxMessage> captor = ArgumentCaptor.forClass(OutboxMessage.class);
         verify(outboxRepository).save(captor.capture());
@@ -111,7 +114,7 @@ class OrderServiceTest {
         when(orderRepository.save(any(Order.class)))
                 .thenThrow(new RuntimeException("veritabanı erişilemiyor"));
 
-        assertThatThrownBy(() -> orderService.placeOrder(command()))
+        assertThatThrownBy(() -> orderService.placeOrder(command(), CUSTOMER))
                 .isInstanceOf(RuntimeException.class);
 
         verify(outboxRepository, never()).save(any());
@@ -119,9 +122,9 @@ class OrderServiceTest {
 
     @Test
     void placeOrder_shouldRejectEmptyLines() {
-        PlaceOrderCommand empty = new PlaceOrderCommand("c-1", "TRY", List.of());
+        PlaceOrderCommand empty = new PlaceOrderCommand("TRY", List.of());
 
-        assertThatThrownBy(() -> orderService.placeOrder(empty))
+        assertThatThrownBy(() -> orderService.placeOrder(empty, CUSTOMER))
                 .isInstanceOf(IllegalArgumentException.class);
 
         verify(orderRepository, never()).save(any());
@@ -136,14 +139,53 @@ class OrderServiceTest {
                         com.kervan.order.domain.model.Money.of("10.00", "TRY"))), NOW);
         when(orderRepository.findById("order-1")).thenReturn(Optional.of(stored));
 
-        assertThat(orderService.getOrder("order-1").customerId()).isEqualTo("c-1");
+        assertThat(orderService.getOrder("order-1", CUSTOMER).customerId()).isEqualTo("c-1");
+    }
+
+    @Test
+    @DisplayName("müşteri başkasının siparişini göremez")
+    void getOrder_shouldDenyAccessToAnotherCustomersOrder() {
+        Order otherPersons = Order.place("baskasi", List.of(
+                new com.kervan.order.domain.model.OrderLine(
+                        "p-1", "SKU-1", 1,
+                        com.kervan.order.domain.model.Money.of("10.00", "TRY"))), NOW);
+        when(orderRepository.findById("order-9")).thenReturn(Optional.of(otherPersons));
+
+        assertThatThrownBy(() -> orderService.getOrder("order-9", CUSTOMER))
+                .isInstanceOf(OrderAccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("yönetici her siparişi görebilir")
+    void getOrder_shouldAllowAdminToReadAnyOrder() {
+        Order otherPersons = Order.place("baskasi", List.of(
+                new com.kervan.order.domain.model.OrderLine(
+                        "p-1", "SKU-1", 1,
+                        com.kervan.order.domain.model.Money.of("10.00", "TRY"))), NOW);
+        when(orderRepository.findById("order-9")).thenReturn(Optional.of(otherPersons));
+
+        assertThat(orderService.getOrder("order-9", Caller.admin("admin-1")).customerId())
+                .isEqualTo("baskasi");
+    }
+
+    @Test
+    @DisplayName("sipariş sahibi çağırandan alınır, komuttan değil")
+    void placeOrder_shouldTakeOwnerFromCaller() {
+        repositoryAssignsId("order-1");
+
+        orderService.placeOrder(command(), Caller.customer("gercek-musteri"));
+
+        org.mockito.ArgumentCaptor<Order> captor =
+                org.mockito.ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(captor.capture());
+        assertThat(captor.getValue().customerId()).isEqualTo("gercek-musteri");
     }
 
     @Test
     void getOrder_shouldThrowWhenMissing() {
         when(orderRepository.findById("yok")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> orderService.getOrder("yok"))
+        assertThatThrownBy(() -> orderService.getOrder("yok", CUSTOMER))
                 .isInstanceOf(OrderNotFoundException.class)
                 .hasMessageContaining("yok");
     }

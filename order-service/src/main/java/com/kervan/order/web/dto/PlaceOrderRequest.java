@@ -11,10 +11,14 @@ import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * Sipariş oluşturma isteği.
+ * <p>
+ * <b>customerId burada YOK.</b> Sipariş sahibi doğrulanmış token'dan alınır; istemcinin
+ * bildirdiği bir alandan değil. Aksi hâlde geçerli bir token taşıyan herhangi biri,
+ * gövdeye başka bir kimlik yazarak o kişinin adına sipariş oluşturabilirdi.
+ */
 public record PlaceOrderRequest(
-
-        @NotBlank(message = "customerId zorunludur")
-        String customerId,
 
         @NotBlank(message = "currency zorunludur")
         @Pattern(regexp = "^[A-Z]{3}$", message = "currency ISO 4217 kodu olmalı (örn. TRY)")

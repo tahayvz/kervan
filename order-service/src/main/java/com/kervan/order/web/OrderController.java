@@ -2,6 +2,7 @@ package com.kervan.order.web;
 
 import com.kervan.order.application.OrderService;
 import com.kervan.order.application.command.PlaceOrderCommand;
+import com.kervan.order.domain.model.Caller;
 import com.kervan.order.web.dto.OrderResponse;
 import com.kervan.order.web.dto.PlaceOrderRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,8 +40,10 @@ class OrderController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    OrderResponse placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
-        return OrderResponse.from(orderService.placeOrder(toCommand(request)));
+    OrderResponse placeOrder(@Valid @RequestBody PlaceOrderRequest request,
+                             JwtAuthenticationToken token) {
+        Caller caller = CallerMapper.from(token);
+        return OrderResponse.from(orderService.placeOrder(toCommand(request), caller));
     }
 
     @Operation(summary = "Siparişi id ile getir")
@@ -48,13 +52,12 @@ class OrderController {
             @ApiResponse(responseCode = "404", description = "Sipariş bulunamadı")
     })
     @GetMapping("/{id}")
-    OrderResponse getOrder(@PathVariable String id) {
-        return OrderResponse.from(orderService.getOrder(id));
+    OrderResponse getOrder(@PathVariable String id, JwtAuthenticationToken token) {
+        return OrderResponse.from(orderService.getOrder(id, CallerMapper.from(token)));
     }
 
     private PlaceOrderCommand toCommand(PlaceOrderRequest request) {
         return new PlaceOrderCommand(
-                request.customerId(),
                 request.currency(),
                 request.lines().stream()
                         .map(line -> new PlaceOrderCommand.Line(

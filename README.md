@@ -42,7 +42,8 @@ marked done unless its code and tests are in this repository.
 | 0 | Mono-repo skeleton, ADRs, architecture docs, local infra compose | ✅ Done |
 | 1 | **Catalog Service** — MongoDB, Mongock migrations, OpenAPI, Testcontainers | ✅ Done |
 | 3a | **Order Service + Transactional Outbox → Kafka** | ✅ Done |
-| 2 | API Gateway + Keycloak (OAuth2 / OIDC) | Planned |
+| 2a | **JWT security — OAuth2 resource server, roles, record-level ownership** | ✅ Done |
+| 2b | API Gateway (Spring Cloud Gateway) | Planned |
 | 3b | Avro + Schema Registry + Debezium CDC | Planned |
 | 4 | Order / Payment / Inventory + Saga orchestration | Planned |
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
@@ -123,6 +124,28 @@ web/             REST controllers, DTOs, RFC 7807 error handling
 
 Service documentation: [catalog-service/README.md](catalog-service/README.md)
 
+### Order Service — outbox and security
+
+Beyond the outbox described above, the service is an **OAuth2 resource server**. It does
+not issue tokens; Keycloak does. It validates the signature, converts Keycloak's
+`realm_access.roles` into Spring authorities, and enforces two layers:
+
+- **Role level** — placing or reading an order requires `CUSTOMER` or `ADMIN`
+- **Record level** — a customer may read only their **own** orders; an admin may read any
+
+The second layer is the one role checks miss. A valid `CUSTOMER` token passes every role
+gate and can still ask for someone else's order id; without an ownership check the
+service hands it over. That rule lives in the domain (`Caller.owns`), not in a filter, so
+it holds for any entry point, and it is asserted by tests rather than assumed.
+
+**The order's owner comes from the token, not the request body.** `PlaceOrderRequest` has
+no `customerId` field on purpose — if it did, anyone with a valid token could place orders
+in another customer's name.
+
+Eleven security tests cover the cases that matter: no token, a token signed by another
+key, an expired token, a token with no roles, one customer reaching for another's order,
+an admin reading any order, and which endpoints stay public.
+
 ### Order Service
 
 Places orders and publishes `OrderPlaced` events — through an outbox, not directly.
@@ -197,7 +220,7 @@ docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
 ```bash
-mvn test     # 78 tests: 13 catalog + 65 order
+mvn test     # 92 tests: 13 catalog + 79 order
 ```
 
 ```bash
@@ -205,10 +228,25 @@ mvn -pl catalog-service spring-boot:run   # http://localhost:8081
 mvn -pl order-service   spring-boot:run   # http://localhost:8082
 ```
 
-OpenAPI UI at `/swagger-ui.html` on each service.
+Order endpoints require a bearer token. The local Keycloak realm (`kervan`) ships with
+two users for manual exploration — `musteri` / `musteri` (CUSTOMER) and `yonetici` /
+`yonetici` (ADMIN). Development credentials only; that realm file never leaves Docker
+Compose.
+
+```bash
+curl -s -d 'client_id=kervan-cli' -d 'username=musteri' -d 'password=musteri'      -d 'grant_type=password'      http://localhost:8080/realms/kervan/protocol/openid-connect/token
+```
+
+API documentation is **closed by default** — it hands an attacker a map of the endpoints,
+field names and validation rules. To browse it locally:
+
+```bash
+KERVAN_EXPOSE_API_DOCS=true mvn -pl order-service spring-boot:run
+```
 
 Integration tests start their own MongoDB, PostgreSQL and Kafka containers, so Docker
-must be running.
+must be running. They mint their own signed tokens, so Keycloak is not needed to run
+them.
 
 ---
 

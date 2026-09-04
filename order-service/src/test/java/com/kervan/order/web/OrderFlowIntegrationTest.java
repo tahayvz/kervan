@@ -1,6 +1,7 @@
 package com.kervan.order.web;
 
 import com.kervan.order.AbstractIntegrationTest;
+import com.kervan.order.security.TestJwtSupport;
 import com.kervan.order.domain.model.OutboxMessage;
 import com.kervan.order.domain.port.OutboxRepository;
 import com.kervan.order.web.dto.OrderResponse;
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -40,8 +44,25 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
     @Value("${kervan.outbox.topic}")
     private String topic;
 
+    /** Her test kendi müşterisiyle çalışır; testler birbirinin verisini görmez. */
+    private final String customerId = "customer-" + UUID.randomUUID();
+
+    private String customerToken() {
+        return TestJwtSupport.tokenFor(customerId, "CUSTOMER");
+    }
+
+    private <T> HttpEntity<T> authed(T body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(customerToken());
+        return new HttpEntity<>(body, headers);
+    }
+
+    private HttpEntity<Void> authed() {
+        return authed(null);
+    }
+
     private PlaceOrderRequest request() {
-        return new PlaceOrderRequest("customer-" + UUID.randomUUID(), "TRY", List.of(
+        return new PlaceOrderRequest("TRY", List.of(
                 new PlaceOrderRequest.Line("p-1", "SKU-1", 2, new BigDecimal("100.00")),
                 new PlaceOrderRequest.Line("p-2", "SKU-2", 1, new BigDecimal("49.90"))));
     }
@@ -49,7 +70,7 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
     @Test
     void placeOrder_shouldPersistOrderAndComputeTotal() {
         ResponseEntity<OrderResponse> response =
-                rest.postForEntity("/api/v1/orders", request(), OrderResponse.class);
+                rest.exchange("/api/v1/orders", HttpMethod.POST, authed(request()), OrderResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
@@ -60,11 +81,11 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void placedOrder_shouldBeReadableById() {
-        String id = rest.postForEntity("/api/v1/orders", request(), OrderResponse.class)
+        String id = rest.exchange("/api/v1/orders", HttpMethod.POST, authed(request()), OrderResponse.class)
                 .getBody().id();
 
         ResponseEntity<OrderResponse> found =
-                rest.getForEntity("/api/v1/orders/" + id, OrderResponse.class);
+                rest.exchange("/api/v1/orders/" + id, HttpMethod.GET, authed(), OrderResponse.class);
 
         assertThat(found.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(found.getBody().id()).isEqualTo(id);
@@ -74,7 +95,7 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("olay outbox üzerinden Kafka'ya ulaşır ve yayınlandı olarak işaretlenir")
     void placedOrder_shouldReachKafkaThroughOutbox() {
-        String id = rest.postForEntity("/api/v1/orders", request(), OrderResponse.class)
+        String id = rest.exchange("/api/v1/orders", HttpMethod.POST, authed(request()), OrderResponse.class)
                 .getBody().id();
 
         try (KafkaConsumer<String, String> consumer = consumer()) {
@@ -98,7 +119,7 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
     @Test
     void unknownOrder_shouldReturnProblemDetail() {
         ResponseEntity<String> response =
-                rest.getForEntity("/api/v1/orders/" + UUID.randomUUID(), String.class);
+                rest.exchange("/api/v1/orders/" + UUID.randomUUID(), HttpMethod.GET, authed(), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).contains("Sipariş bulunamadı");
@@ -106,10 +127,10 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void invalidRequest_shouldBeRejectedBeforePersisting() {
-        PlaceOrderRequest invalid = new PlaceOrderRequest("c-1", "TRY", List.of());
+        PlaceOrderRequest invalid = new PlaceOrderRequest("TRY", List.of());
 
         ResponseEntity<String> response =
-                rest.postForEntity("/api/v1/orders", invalid, String.class);
+                rest.exchange("/api/v1/orders", HttpMethod.POST, authed(invalid), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).contains("Doğrulama hatası");
@@ -117,10 +138,10 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void unknownCurrency_shouldBeRejected() {
-        PlaceOrderRequest invalid = new PlaceOrderRequest("c-1", "XXXX", List.of(
+        PlaceOrderRequest invalid = new PlaceOrderRequest("XXXX", List.of(
                 new PlaceOrderRequest.Line("p-1", "SKU-1", 1, new BigDecimal("10.00"))));
 
-        assertThat(rest.postForEntity("/api/v1/orders", invalid, String.class).getStatusCode())
+        assertThat(rest.exchange("/api/v1/orders", HttpMethod.POST, authed(invalid), String.class).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 

@@ -26,6 +26,15 @@ spring:
       # işareti ancak gerçekten dayanıklı yazımdan sonra konmalı.
       acks: all
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak'ın imzalama anahtarları. Anahtar döndürüldüğünde (key rotation)
+          # Spring bu adresten yenisini kendisi çeker; anahtarı dosyaya gömmek
+          # rotasyonu elle iş hâline getirirdi.
+          jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
+
 kervan:
   outbox:
     topic: kervan.orders.events
