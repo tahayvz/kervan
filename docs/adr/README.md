@@ -20,6 +20,7 @@ kararı veren kişi ekipten ayrıldığında gerekçe onunla birlikte gitmez.
 - [ADR-0004](0004-transactional-outbox-debezium.md) — Dual-write: Outbox + Debezium
 - [ADR-0005](0005-saga-orchestration.md) — Dağıtık tutarlılık: Saga (orchestration)
 - [ADR-0006](0006-polyglot-persistence-mongodb.md) — Polyglot persistence: Catalog MongoDB, çekirdek PostgreSQL
+- [ADR-0007](0007-gateway-authenticates-services-authorize.md) — Ağ geçidi kimlik doğrular, yetkiyi servisler denetler
 
 ## Yeni ADR nasıl yazılır
 `NNNN-kisa-baslik.md` adıyla, `_template.md`'yi kopyalayarak.

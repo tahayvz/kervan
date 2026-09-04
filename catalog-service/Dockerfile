@@ -13,10 +13,12 @@ WORKDIR /workspace
 # Önce sadece POM'ları kopyala → bağımlılık katmanı Docker cache'inde kalır,
 # kaynak değişince baştan indirilmez.
 COPY pom.xml .
-# Parent POM her iki modulu de listeler; Maven reactor'u kurabilmek icin
-# ikisinin de POM'u gerekir, derlenen tek modul olsa bile.
+# Parent POM tum modulleri listeler; Maven reactor'u kurabilmek icin
+# HEPSININ POM'u gerekir, derlenen tek modul olsa bile. Yeni modul eklenince
+# bu satirlar guncellenmezse imaj derlemesi kirilir (testler yesil kalir).
 COPY catalog-service/pom.xml catalog-service/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
+COPY api-gateway/pom.xml api-gateway/pom.xml
 RUN mvn -B -pl catalog-service -am dependency:go-offline -DskipTests || true
 
 # Sonra kaynağı kopyala ve derle (testler imaj build'inde çalışmaz; onlar CI'da — Faz 8)

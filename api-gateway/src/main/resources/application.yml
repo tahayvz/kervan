@@ -1,0 +1,45 @@
+server:
+  # 8080 Keycloak'ta; ag gecidi on kapi olarak 8000'de durur.
+  port: 8000
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      routes:
+        # Katalog: urun okuma. GET'ler herkese acik (GatewaySecurityConfig).
+        - id: catalog
+          uri: ${KERVAN_CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/products/**
+
+        # Siparis: kimlik dogrulamasi zorunlu. Rol ve sahiplik denetimi
+        # order-service'te yapilir, burada degil (ADR-0007).
+        - id: orders
+          uri: ${KERVAN_ORDER_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/orders/**
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # order-service ile AYNI ayar. issuer-uri yerine jwk-set-uri kullaniliyor:
+          # issuer-uri acilista OIDC kesfi yapar ve Keycloak ayakta degilse uygulama
+          # kalkmaz. jwk-set-uri ise anahtarlari ilk dogrulamada ceker.
+          jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    com.kervan.gateway: INFO

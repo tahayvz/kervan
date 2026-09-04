@@ -53,7 +53,7 @@ test edildi, OpenAPI sözleşmesi API-first üretildi.
 
 ---
 
-## Faz 2 — API Gateway + Kimlik (Keycloak)  · 2a ✅
+## Faz 2 — API Gateway + Kimlik (Keycloak)  · 2a ✅ · 2b ✅
 
 **Neden:** Kurumsal sistemlerde her servis kendi auth'unu yazmaz. Merkezî bir
 **kimlik sağlayıcı** (Keycloak) ve tek giriş noktası (**Gateway**) olur.
@@ -66,6 +66,15 @@ test edildi, OpenAPI sözleşmesi API-first üretildi.
 
 **Kazanım:** Kimlik doğrulama Keycloak'a devredilir; token Gateway'de doğrulanıp
 claim'ler downstream servislere taşınır, servisler stateless resource-server olur.
+
+**2b'de yapılanlar (`api-gateway`, port 8000):** Spring Cloud Gateway ile yönlendirme
+(`/api/v1/products/**` → catalog, `/api/v1/orders/**` → order) ve merkezî JWT
+doğrulama. **Yetki denetimi bilinçli olarak taşınmadı** — gerekçesi ADR-0007'de:
+kural iki yere yazılırsa kayar, ve kayıt bazlı sahiplik ağ geçidinde zaten yapılamaz.
+9 test: yönlendirmenin doğru servise gittiği, token'ın aşağı iletildiği ve kimliksiz
+isteğin arka servise **hiç ulaşmadığı** doğrulanıyor.
+
+Rate limiting bu faza alınmadı; Redis tabanlı sınırlama Faz 7'de.
 
 ---
 

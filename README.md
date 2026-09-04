@@ -124,6 +124,33 @@ web/             REST controllers, DTOs, RFC 7807 error handling
 
 Service documentation: [catalog-service/README.md](catalog-service/README.md)
 
+### API Gateway — one front door
+
+`api-gateway` (port 8000, because Keycloak already holds 8080) routes
+`/api/v1/products/**` to catalog and `/api/v1/orders/**` to orders, and validates the
+JWT before either service sees the request.
+
+**It authenticates; it does not authorize.** That split is deliberate and written up in
+[ADR-0007](docs/adr/0007-gateway-authenticates-services-authorize.md). Role checks and
+record-level ownership stay in `order-service` for two reasons: a rule written in two
+places drifts apart, and "is this order yours?" cannot be answered at the edge because
+the answer is in the database. Catalog reads stay public, matching what the service
+already did — a product list is a shop window.
+
+The token is forwarded downstream unchanged and the services keep validating it
+themselves. The gateway is a filter, not the only wall: a request that reaches a service
+from inside the network still has to get past it.
+
+Nine tests, each against two stub servers standing in for the real services:
+
+| What it pins down | Why it matters |
+|---|---|
+| Products go to catalog, orders go to orders | A routing typo sends traffic to the wrong service and returns plausible-looking wrong data |
+| An unknown path is routed nowhere | |
+| The `Authorization` header survives the hop | Without it the service cannot identify the caller and ownership checks stop working |
+| No token, foreign signature, or expired token → 401 **and the service receives nothing** | Asserting the 401 alone would not prove traffic was stopped at the edge, which is the point of having an edge |
+| Product reads work without a token | The gateway must not quietly change behaviour the service already had |
+
 ### Order Service — outbox and security
 
 Beyond the outbox described above, the service is an **OAuth2 resource server**. It does
@@ -220,12 +247,13 @@ docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
 ```bash
-mvn test     # 92 tests: 13 catalog + 79 order
+mvn test     # 101 tests: 13 catalog + 79 order + 9 gateway
 ```
 
 ```bash
 mvn -pl catalog-service spring-boot:run   # http://localhost:8081
 mvn -pl order-service   spring-boot:run   # http://localhost:8082
+mvn -pl api-gateway     spring-boot:run   # http://localhost:8000  (front door)
 ```
 
 Order endpoints require a bearer token. The local Keycloak realm (`kervan`) ships with

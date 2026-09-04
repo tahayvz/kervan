@@ -114,6 +114,24 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Tek giris noktasi. Kimlik dogrular, yetkiyi servisler denetler (ADR-0007).
+  # 8080 Keycloak'ta oldugu icin on kapi 8000'de.
+  api-gateway:
+    build:
+      context: ../..
+      dockerfile: api-gateway/Dockerfile
+    container_name: kervan-api-gateway
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      KERVAN_CATALOG_URL: http://catalog-service:8081
+      KERVAN_ORDER_URL: http://order-service:8082
+      KERVAN_JWKS_URI: http://keycloak:8080/realms/kervan/protocol/openid-connect/certs
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   mongo-data:
