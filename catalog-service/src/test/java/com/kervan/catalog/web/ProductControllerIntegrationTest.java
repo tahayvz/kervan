@@ -1,6 +1,7 @@
 package com.kervan.catalog.web;
 
 import com.kervan.catalog.AbstractMongoIntegrationTest;
+import com.kervan.catalog.security.TestJwtSupport;
 import com.kervan.catalog.infrastructure.persistence.SpringDataProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * indekslerini birlikte doğrular.
  */
 class ProductControllerIntegrationTest extends AbstractMongoIntegrationTest {
+
+    /**
+     * Katalogu degistiren her istek yonetici ister (SecurityConfig).
+     * Testler bunu tasimazsa 403 alir -- ve bu dogru davranistir.
+     */
+    private static final String ADMIN = "Bearer " + TestJwtSupport.tokenFor("yonetici-test", "ADMIN");
 
     @Autowired
     MockMvc mockMvc;
@@ -50,6 +57,7 @@ class ProductControllerIntegrationTest extends AbstractMongoIntegrationTest {
     @Test
     void createProduct_returns201_withLocation_andDraftStatus() throws Exception {
         mockMvc.perform(post("/api/v1/products")
+                        .header("Authorization", ADMIN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(PHONE_JSON))
                 .andExpect(status().isCreated())
@@ -65,6 +73,7 @@ class ProductControllerIntegrationTest extends AbstractMongoIntegrationTest {
     @Test
     void getProduct_returns200_afterCreate() throws Exception {
         String location = mockMvc.perform(post("/api/v1/products")
+                        .header("Authorization", ADMIN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(PHONE_JSON))
                 .andExpect(status().isCreated())
@@ -88,12 +97,14 @@ class ProductControllerIntegrationTest extends AbstractMongoIntegrationTest {
     @Test
     void duplicateSku_returns409() throws Exception {
         mockMvc.perform(post("/api/v1/products")
+                        .header("Authorization", ADMIN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(PHONE_JSON))
                 .andExpect(status().isCreated());
 
         // Aynı SKU ile ikinci istek → 409 Conflict
         mockMvc.perform(post("/api/v1/products")
+                        .header("Authorization", ADMIN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(PHONE_JSON))
                 .andExpect(status().isConflict())
@@ -107,6 +118,7 @@ class ProductControllerIntegrationTest extends AbstractMongoIntegrationTest {
                   "price": { "amount": 10.0, "currency": "TRY" } }
                 """; // name yok → doğrulama hatası
         mockMvc.perform(post("/api/v1/products")
+                        .header("Authorization", ADMIN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalid))
                 .andExpect(status().isBadRequest())
@@ -117,12 +129,14 @@ class ProductControllerIntegrationTest extends AbstractMongoIntegrationTest {
     @Test
     void activate_thenList_filtersByStatus() throws Exception {
         String location = mockMvc.perform(post("/api/v1/products")
+                        .header("Authorization", ADMIN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(PHONE_JSON))
                 .andReturn().getResponse().getHeader("Location");
 
         // DRAFT → ACTIVE
-        mockMvc.perform(post(location + "/activate"))
+        mockMvc.perform(post(location + "/activate")
+                        .header("Authorization", ADMIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ACTIVE")));
 

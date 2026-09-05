@@ -62,3 +62,12 @@ Soru şu: güvenlik denetimi nerede yapılmalı?
   denetiminin olduğu **doğrulanmalıdır**. Denetimsiz bir servisi ağ geçidine bağlamak,
   onu kimliği doğrulanmış herkese açar. Rate limiting bu ADR'nin kapsamında değildir;
   Faz 7'ye (Resilience4j) bırakılmıştır.
+
+- **Bu şart ilk turda karşılanmadı.** Ağ geçidi eklendiğinde `catalog-service`'te
+  hiçbir yetki denetimi yoktu. Sonuç: CUSTOMER rolüyle alınmış herhangi bir token
+  `DELETE /api/v1/products/{id}` çağırıp ürünü kalıcı silebiliyordu. Ağ geçidi
+  "authenticated" diyerek korunuyormuş izlenimi veriyordu. Katalog artık kendi
+  `SecurityConfig`'ine sahip: okuma herkese açık, katalogu **değiştiren** her şey
+  `ADMIN` ister. Sekiz test bunu sabitliyor.
+
+  Ders: bu maddeyi yazmak yetmiyor, yeni rota eklerken **uygulamak** gerekiyor.

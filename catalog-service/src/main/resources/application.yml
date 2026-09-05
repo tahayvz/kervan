@@ -12,6 +12,13 @@ spring:
       # İndeksler Mongock migration'ıyla yönetilir; Spring'in otomatik indekslemesi kapalı.
       auto-index-creation: false
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # order-service ile AYNI ayar. issuer-uri yerine jwk-set-uri: issuer-uri
+          # acilista OIDC kesfi yapar ve Keycloak ayakta degilse uygulama kalkmaz.
+          jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
 # Mongock — migration changeset'lerinin tarandığı paket
 mongock:
   migration-scan-package: com.kervan.catalog.infrastructure.migration

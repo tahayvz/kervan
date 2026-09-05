@@ -117,6 +117,10 @@ infrastructure/  MongoDB adapter, Mongock migrations, OpenAPI config
 web/             REST controllers, DTOs, RFC 7807 error handling
 ```
 
+- **Authorization** — reads are public (a catalogue is a shop window); anything that
+  *changes* the catalogue requires `ADMIN`. This was missing when the gateway went in,
+  which left permanent deletes open to any authenticated customer — see
+  [ADR-0007](docs/adr/0007-gateway-authenticates-services-authorize.md)
 - **MongoDB + Mongock** — index migrations are versioned and run on startup
 - **Testcontainers** — integration tests run against a real MongoDB, not an in-memory fake
 - **RFC 7807** problem responses
@@ -247,7 +251,7 @@ docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
 ```bash
-mvn test     # 101 tests: 13 catalog + 79 order + 9 gateway
+mvn test     # 109 tests: 21 catalog + 79 order + 9 gateway
 ```
 
 ```bash
