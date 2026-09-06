@@ -50,6 +50,9 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   şema publish edemez.
 - **Alternatif:** Protobuf de iyi; Avro Kafka/Confluent ekosisteminde daha yerleşik.
 - **Kurumsal karşılığı:** Confluent platformunu kullanan kurumlarda standart yığın.
+- **Durum:** Kullanımda. Şemalar `event-contracts` modülünde; uyumluluk modu BACKWARD.
+  Registry'nin kuralı ayrıca test zamanında da doğrulanıyor (`SchemaEvolutionTest`),
+  böylece uyumsuz değişiklik çalışan sisteme değil CI'ya çarpıyor. *(ADR-0008)*
 
 ### Debezium (Change Data Capture)
 - **Problem:** "Dual-write" — DB'ye yaz + Kafka'ya yaz atomik değil (bkz. Architecture §4).

@@ -73,6 +73,11 @@ zorlamayız (bkz. ADR-0006):
 - **Gevşek bağ (loose coupling):** Order servisi, kimin dinlediğini bilmez
 - Event'ler **Avro + Schema Registry** ile şemalıdır (uyumluluk garantisi)
 
+> **Bugünkü durum:** Avro ve Schema Registry kullanımda (ADR-0008). Şemalar ortak
+> `event-contracts` modülünde; uyumluluk modu BACKWARD. Outbox kaydını Kafka'ya
+> taşıyan iş şu an uygulama içindeki bir yayıncıdır; Debezium'a geçiş Faz 3c'dedir
+> (§4.2).
+
 ```
 Senkron  : İstemci ──REST──▶ Gateway ──REST──▶ Catalog   (anlık cevap)
 Asenkron : Order ──event──▶ Kafka ──▶ {Inventory, Payment, Search, Notification}

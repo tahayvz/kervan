@@ -40,6 +40,29 @@
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
         </dependency>
+
+        <!--
+          Olay sözleşmesi: Avro şemaları ve onlardan üretilen sınıflar burada değil,
+          ortak modülde durur. Bu servis olayı üretir; tüketen servis aynı modüle
+          bağlanır, bu servise değil. Bkz. ADR-0008.
+        -->
+        <dependency>
+            <groupId>com.kervan</groupId>
+            <artifactId>event-contracts</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+          Avro nesnesini Confluent'ın kablo biçimine çevirir: 1 sihirli bayt +
+          4 baytlık şema kimliği + Avro ikili gövde. Şema kimliği mesajın İÇİNDE
+          taşındığı için okuyan taraf şemayı Registry'den kendisi çeker; şemayı
+          mesajın yanında ayrıca göndermek gerekmez.
+        -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${confluent.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>

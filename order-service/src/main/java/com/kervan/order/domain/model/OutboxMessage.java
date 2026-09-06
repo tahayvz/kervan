@@ -1,6 +1,7 @@
 package com.kervan.order.domain.model;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -28,6 +29,11 @@ import java.util.Objects;
  * sonra işaretlemeden önce çökme olursa aynı olay tekrar gider. Bu yüzden tüketiciler
  * idempotent olmak zorundadır; {@link #id} tekrarları elemek için sabit bir anahtardır.
  *
+ * <h2>Payload neden bayt?</h2>
+ * Olay Avro ile serileştirilir; sonuç metin değil ikili veridir. Baytların ilk beş
+ * baytı şemanın Schema Registry'deki kimliğini taşır, bu yüzden olayı okuyan taraf
+ * hangi şemayla yazıldığını mesajın kendisinden bulur (ADR-0008).
+ *
  * <p>Karar kaydı: {@code docs/adr/0004-transactional-outbox-debezium.md}
  */
 public record OutboxMessage(
@@ -35,7 +41,7 @@ public record OutboxMessage(
         String aggregateType,
         String aggregateId,
         String eventType,
-        String payload,
+        byte[] payload,
         Instant occurredAt,
         Instant publishedAt) {
 
@@ -45,16 +51,56 @@ public record OutboxMessage(
         Objects.requireNonNull(eventType, "eventType null olamaz");
         Objects.requireNonNull(payload, "payload null olamaz");
         Objects.requireNonNull(occurredAt, "occurredAt null olamaz");
+        // Dizi paylaşılan bir referanstır; kopyalanmazsa çağıran taraf kaydı
+        // oluşturduktan sonra içeriğini değiştirebilirdi.
+        payload = payload.clone();
+    }
+
+    /** @return payload'ın kopyası; dönen diziyi değiştirmek kaydı etkilemez. */
+    @Override
+    public byte[] payload() {
+        return payload.clone();
     }
 
     /** Henüz yayınlanmamış yeni bir kayıt. */
     public static OutboxMessage pending(String aggregateType, String aggregateId,
-                                        String eventType, String payload, Instant occurredAt) {
+                                        String eventType, byte[] payload, Instant occurredAt) {
         return new OutboxMessage(null, aggregateType, aggregateId, eventType,
                 payload, occurredAt, null);
     }
 
     public boolean isPublished() {
         return publishedAt != null;
+    }
+
+    /**
+     * Kayıt tipinin ürettiği {@code equals}/{@code hashCode} diziyi referansa göre
+     * karşılaştırır; aynı içerikli iki kayıt farklı sayılırdı. Payload'ı içeriğine
+     * göre karşılaştıracak şekilde elle yazıldı.
+     */
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof OutboxMessage that
+                && Objects.equals(id, that.id)
+                && Objects.equals(aggregateType, that.aggregateType)
+                && Objects.equals(aggregateId, that.aggregateId)
+                && Objects.equals(eventType, that.eventType)
+                && Arrays.equals(payload, that.payload)
+                && Objects.equals(occurredAt, that.occurredAt)
+                && Objects.equals(publishedAt, that.publishedAt);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, aggregateType, aggregateId, eventType,
+                Arrays.hashCode(payload), occurredAt, publishedAt);
+    }
+
+    @Override
+    public String toString() {
+        // Payload ikili veridir; log'a basılırsa okunmaz bir yığın üretir.
+        // Yerine boyutu yazılır: sorun ararken asıl işe yarayan bilgi odur.
+        return "OutboxMessage[id=%s, aggregateType=%s, aggregateId=%s, eventType=%s, payloadBytes=%d, occurredAt=%s, publishedAt=%s]"
+                .formatted(id, aggregateType, aggregateId, eventType, payload.length, occurredAt, publishedAt);
     }
 }

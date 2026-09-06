@@ -1,12 +1,13 @@
 package com.kervan.order.application;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kervan.order.application.command.PlaceOrderCommand;
 import com.kervan.order.application.exception.OrderAccessDeniedException;
 import com.kervan.order.application.exception.OrderNotFoundException;
+import com.kervan.order.domain.event.OrderPlaced;
 import com.kervan.order.domain.model.Caller;
 import com.kervan.order.domain.model.Order;
 import com.kervan.order.domain.model.OutboxMessage;
+import com.kervan.order.domain.port.OrderEventSerializer;
 import com.kervan.order.domain.port.OrderRepository;
 import com.kervan.order.domain.port.OutboxRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,18 +36,27 @@ class OrderServiceTest {
     private static final Instant NOW = Instant.parse("2026-01-15T10:00:00Z");
     private static final Caller CUSTOMER = Caller.customer("c-1");
 
+    /** Serileştirilmiş olayın yerine geçen sabit bayt dizisi. */
+    private static final byte[] SERIALISED = {1, 2, 3};
+
     private OrderRepository orderRepository;
     private OutboxRepository outboxRepository;
+    private OrderEventSerializer eventSerializer;
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
         orderRepository = mock(OrderRepository.class);
         outboxRepository = mock(OutboxRepository.class);
+        // Olayın hangi biçimde serileştirildiği bu katmanın işi değil; burada
+        // yalnızca doğru olayın verildiği ve çıktısının outbox'a yazıldığı denetlenir.
+        // Avro biçiminin kendisi AvroOrderEventSerializerTest'te doğrulanır.
+        eventSerializer = mock(OrderEventSerializer.class);
+        when(eventSerializer.serialize(any(OrderPlaced.class))).thenReturn(SERIALISED);
         orderService = new OrderService(
                 orderRepository,
                 outboxRepository,
-                new ObjectMapper().findAndRegisterModules(),
+                eventSerializer,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -93,7 +103,32 @@ class OrderServiceTest {
     }
 
     @Test
-    void placeOrder_shouldSerialiseEventPayloadWithOrderDetails() {
+    @DisplayName("serileştiriciye verilen olay siparişin bilgilerini taşır")
+    void placeOrder_shouldBuildEventFromSavedOrder() {
+        repositoryAssignsId("order-1");
+
+        orderService.placeOrder(command(), CUSTOMER);
+
+        ArgumentCaptor<OrderPlaced> captor = ArgumentCaptor.forClass(OrderPlaced.class);
+        verify(eventSerializer).serialize(captor.capture());
+
+        OrderPlaced event = captor.getValue();
+        assertThat(event.orderId()).isEqualTo("order-1");
+        assertThat(event.customerId()).isEqualTo("c-1");
+        assertThat(event.currency()).isEqualTo("TRY");
+        assertThat(event.totalAmount()).isEqualByComparingTo("200.00");
+        assertThat(event.placedAt()).isEqualTo(NOW);
+        assertThat(event.items()).singleElement().satisfies(item -> {
+            assertThat(item.productId()).isEqualTo("p-1");
+            assertThat(item.sku()).isEqualTo("SKU-1");
+            assertThat(item.quantity()).isEqualTo(2);
+            assertThat(item.unitPrice()).isEqualByComparingTo("100.00");
+        });
+    }
+
+    @Test
+    @DisplayName("outbox kaydına serileştiricinin ürettiği baytlar yazılır")
+    void placeOrder_shouldStoreSerialisedPayload() {
         repositoryAssignsId("order-1");
 
         orderService.placeOrder(command(), CUSTOMER);
@@ -101,11 +136,7 @@ class OrderServiceTest {
         ArgumentCaptor<OutboxMessage> captor = ArgumentCaptor.forClass(OutboxMessage.class);
         verify(outboxRepository).save(captor.capture());
 
-        assertThat(captor.getValue().payload())
-                .contains("\"orderId\":\"order-1\"")
-                .contains("\"customerId\":\"c-1\"")
-                .contains("\"currency\":\"TRY\"")
-                .contains("\"sku\":\"SKU-1\"");
+        assertThat(captor.getValue().payload()).isEqualTo(SERIALISED);
     }
 
     @Test

@@ -15,6 +15,12 @@ import org.testcontainers.utility.DockerImageName;
  * Container'lar {@code static} olduğu için tüm test sınıfları arasında bir kez ayağa
  * kalkar. Gömülü/sahte altyapı yerine gerçeği kullanmak, Flyway migration'larının ve
  * Kafka üreticisinin gerçekten çalıştığını doğrular.
+ *
+ * <p><b>Schema Registry neden container değil?</b> Confluent serileştiricileri
+ * {@code mock://} ile başlayan bir adres verildiğinde bellek içi bir kayıt defteri
+ * kullanır. Şema kaydı ve kimlik atama aynı kodla yürür, yalnızca ağ katmanı
+ * devrededir. Gerçek Registry'ye karşı çalışan doğrulama ayrı bir testtedir:
+ * {@code SchemaRegistryCompatibilityIT}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestJwtSupport.class)
@@ -37,5 +43,6 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
+        registry.add("kervan.schema-registry.url", () -> "mock://order-service-tests");
     }
 }

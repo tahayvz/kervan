@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,7 +32,7 @@ class OutboxPublisherTest {
     private static final int MAX_ATTEMPTS = 5;
 
     private OutboxRepository outboxRepository;
-    private KafkaTemplate<String, String> kafkaTemplate;
+    private KafkaTemplate<String, byte[]> kafkaTemplate;
     private OutboxPublisher publisher;
 
     @BeforeEach
@@ -51,16 +52,25 @@ class OutboxPublisherTest {
 
     private OutboxMessage message(String id, String aggregateId) {
         return new OutboxMessage(id, "Order", aggregateId, "OrderPlaced",
-                "{\"orderId\":\"" + aggregateId + "\"}", NOW, null);
+                payloadOf(aggregateId), NOW, null);
+    }
+
+    /**
+     * Gerçekte burada Avro baytları olur. Bu sınıfın konusu taşıma davranışıdır,
+     * içerik değil; bu yüzden sipariş başına ayırt edilebilir sabit bir bayt dizisi
+     * yeterlidir.
+     */
+    private static byte[] payloadOf(String aggregateId) {
+        return aggregateId.getBytes(StandardCharsets.UTF_8);
     }
 
     private void kafkaAccepts() {
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        when(kafkaTemplate.send(anyString(), anyString(), any(byte[].class)))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
     }
 
     private void kafkaRejects(String reason) {
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        when(kafkaTemplate.send(anyString(), anyString(), any(byte[].class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException(reason)));
     }
 
@@ -72,7 +82,7 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate).send(TOPIC, "order-1", "{\"orderId\":\"order-1\"}");
+        verify(kafkaTemplate).send(TOPIC, "order-1", payloadOf("order-1"));
     }
 
     @Test
@@ -119,8 +129,8 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate).send(TOPIC, "order-1", "{\"orderId\":\"order-1\"}");
-        verify(kafkaTemplate, never()).send(TOPIC, "order-2", "{\"orderId\":\"order-2\"}");
+        verify(kafkaTemplate).send(TOPIC, "order-1", payloadOf("order-1"));
+        verify(kafkaTemplate, never()).send(TOPIC, "order-2", payloadOf("order-2"));
     }
 
     @Test
@@ -139,6 +149,6 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(byte[].class));
     }
 }

@@ -1,7 +1,5 @@
 package com.kervan.order.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kervan.order.application.command.PlaceOrderCommand;
 import com.kervan.order.application.exception.OrderAccessDeniedException;
 import com.kervan.order.application.exception.OrderNotFoundException;
@@ -11,6 +9,7 @@ import com.kervan.order.domain.model.Money;
 import com.kervan.order.domain.model.Order;
 import com.kervan.order.domain.model.OrderLine;
 import com.kervan.order.domain.model.OutboxMessage;
+import com.kervan.order.domain.port.OrderEventSerializer;
 import com.kervan.order.domain.port.OrderRepository;
 import com.kervan.order.domain.port.OutboxRepository;
 import org.springframework.stereotype.Service;
@@ -35,16 +34,16 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OutboxRepository outboxRepository;
-    private final ObjectMapper objectMapper;
+    private final OrderEventSerializer eventSerializer;
     private final Clock clock;
 
     public OrderService(OrderRepository orderRepository,
                         OutboxRepository outboxRepository,
-                        ObjectMapper objectMapper,
+                        OrderEventSerializer eventSerializer,
                         Clock clock) {
         this.orderRepository = orderRepository;
         this.outboxRepository = outboxRepository;
-        this.objectMapper = objectMapper;
+        this.eventSerializer = eventSerializer;
         this.clock = clock;
     }
 
@@ -107,17 +106,11 @@ public class OrderService {
                         .toList(),
                 order.placedAt());
 
+        // Serileştirme transaction'ın İÇİNDE yapılır. Olay serileştirilemiyorsa
+        // (örneğin şema Registry tarafından reddedildiyse) sipariş de yazılmaz:
+        // kimsenin duymayacağı bir sipariş oluşturmaktansa isteği reddetmek doğrudur.
         return OutboxMessage.pending(
-                AGGREGATE_TYPE, order.id(), OrderPlaced.EVENT_TYPE, serialize(event), now);
-    }
-
-    private String serialize(OrderPlaced event) {
-        try {
-            return objectMapper.writeValueAsString(event);
-        } catch (JsonProcessingException e) {
-            // Kendi ürettiğimiz bir kaydı çeviremiyorsak bu bir programlama hatasıdır;
-            // yutup siparişi olaysız bırakmaktansa transaction'ı geri almak doğrudur.
-            throw new IllegalStateException("OrderPlaced serialize edilemedi", e);
-        }
+                AGGREGATE_TYPE, order.id(), OrderPlaced.EVENT_TYPE,
+                eventSerializer.serialize(event), now);
     }
 }

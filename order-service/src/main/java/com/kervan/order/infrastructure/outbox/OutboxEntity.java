@@ -28,8 +28,16 @@ class OutboxEntity implements Persistable<UUID> {
     @Column(name = "event_type", nullable = false)
     private String eventType;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String payload;
+    /**
+     * Avro ile serileştirilmiş olay. Postgres tarafında {@code bytea}.
+     * <p>
+     * {@code @Lob} bilerek kullanılmadı: PostgreSQL sürücüsünde {@code @Lob byte[]},
+     * veriyi tabloya değil {@code pg_largeobject}'e yazan bir OID'ye eşlenir. O
+     * durumda satır silinse bile içerik ortada kalır ve Debezium'un okuduğu WAL
+     * kaydında payload'ın kendisi bulunmaz — CDC bu sütunu göremezdi.
+     */
+    @Column(nullable = false, columnDefinition = "BYTEA")
+    private byte[] payload;
 
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
@@ -59,7 +67,7 @@ class OutboxEntity implements Persistable<UUID> {
     }
 
     OutboxEntity(UUID id, String aggregateType, String aggregateId, String eventType,
-                 String payload, Instant occurredAt, Instant publishedAt) {
+                 byte[] payload, Instant occurredAt, Instant publishedAt) {
         this.id = id;
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
@@ -101,7 +109,7 @@ class OutboxEntity implements Persistable<UUID> {
         return eventType;
     }
 
-    String getPayload() {
+    byte[] getPayload() {
         return payload;
     }
 

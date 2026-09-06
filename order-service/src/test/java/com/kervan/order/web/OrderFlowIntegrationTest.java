@@ -1,11 +1,15 @@
 package com.kervan.order.web;
 
+import com.kervan.contracts.order.v1.OrderPlaced;
 import com.kervan.order.AbstractIntegrationTest;
 import com.kervan.order.security.TestJwtSupport;
 import com.kervan.order.domain.model.OutboxMessage;
 import com.kervan.order.domain.port.OutboxRepository;
 import com.kervan.order.web.dto.OrderResponse;
 import com.kervan.order.web.dto.PlaceOrderRequest;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -98,17 +102,24 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
         String id = rest.exchange("/api/v1/orders", HttpMethod.POST, authed(request()), OrderResponse.class)
                 .getBody().id();
 
-        try (KafkaConsumer<String, String> consumer = consumer()) {
+        try (KafkaConsumer<String, OrderPlaced> consumer = consumer()) {
             consumer.subscribe(List.of(topic));
 
-            ConsumerRecord<String, String> record = await()
+            ConsumerRecord<String, OrderPlaced> record = await()
                     .atMost(30, TimeUnit.SECONDS)
                     .until(() -> pollFor(consumer, id), r -> r != null);
 
+            // Anahtar sipariş kimliği: aynı siparişin olayları aynı partition'a düşer.
             assertThat(record.key()).isEqualTo(id);
-            assertThat(record.value())
-                    .contains("\"orderId\":\"" + id + "\"")
-                    .contains("\"currency\":\"TRY\"");
+
+            // Tüketici mesajı, üreticinin hiç göndermediği bir şemayla çözdü:
+            // şemanın kimliği mesajın ilk baytlarındaydı, şemanın kendisi
+            // Schema Registry'den geldi (ADR-0008).
+            OrderPlaced event = record.value();
+            assertThat(event.getOrderId()).isEqualTo(id);
+            assertThat(event.getCurrency()).isEqualTo("TRY");
+            assertThat(event.getTotalAmount()).isEqualByComparingTo("249.90");
+            assertThat(event.getItems()).hasSize(2);
         }
 
         await().atMost(15, TimeUnit.SECONDS).untilAsserted(() ->
@@ -145,10 +156,10 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
-    private ConsumerRecord<String, String> pollFor(KafkaConsumer<String, String> consumer,
-                                                   String key) {
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
-        for (ConsumerRecord<String, String> record : records) {
+    private ConsumerRecord<String, OrderPlaced> pollFor(KafkaConsumer<String, OrderPlaced> consumer,
+                                                        String key) {
+        ConsumerRecords<String, OrderPlaced> records = consumer.poll(Duration.ofMillis(500));
+        for (ConsumerRecord<String, OrderPlaced> record : records) {
             if (key.equals(record.key())) {
                 return record;
             }
@@ -156,14 +167,21 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
         return null;
     }
 
-    private KafkaConsumer<String, String> consumer() {
+    /**
+     * Olayı Avro ile çözen tüketici. Şema adresi uygulamanınkiyle aynı sahte
+     * kayıt defterini gösterir; aynı JVM içinde aynı şema kimlikleri geçerlidir.
+     */
+    private KafkaConsumer<String, OrderPlaced> consumer() {
         Properties props = new Properties();
         props.putAll(Map.of(
                 "bootstrap.servers", KAFKA.getBootstrapServers(),
                 "group.id", "test-" + UUID.randomUUID(),
                 "auto.offset.reset", "earliest",
                 "key.deserializer", StringDeserializer.class.getName(),
-                "value.deserializer", StringDeserializer.class.getName()));
+                "value.deserializer", KafkaAvroDeserializer.class.getName(),
+                AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://order-service-tests",
+                // Genel amaçlı GenericRecord değil, şemadan üretilen sınıf dönsün.
+                KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true"));
         return new KafkaConsumer<>(props);
     }
 }

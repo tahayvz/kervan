@@ -16,12 +16,17 @@ COPY pom.xml .
 # Parent POM tum modulleri listeler; Maven reactor'u kurabilmek icin
 # HEPSININ POM'u gerekir, derlenen tek modul olsa bile. Yeni modul eklenince
 # bu satirlar guncellenmezse imaj derlemesi kirilir (testler yesil kalir).
+COPY event-contracts/pom.xml event-contracts/pom.xml
 COPY catalog-service/pom.xml catalog-service/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
 RUN mvn -B -pl order-service -am dependency:go-offline -DskipTests || true
 
 # Sonra kaynağı kopyala ve derle (testler imaj build'inde çalışmaz; onlar CI'da — Faz 8)
+# order-service, olay semalarini event-contracts modulunden alir; -am o modulu de
+# derler, bu yuzden kaynagi da kopyalanmalidir. Yalnizca POM'u kopyalamak reactor'u
+# kurar ama derlemeyi kirar.
+COPY event-contracts/src event-contracts/src
 COPY order-service/src order-service/src
 RUN mvn -B -pl order-service -am -DskipTests clean package
 

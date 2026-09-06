@@ -5,6 +5,7 @@ import com.kervan.order.domain.port.OutboxRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -44,16 +45,28 @@ import java.util.concurrent.TimeoutException;
  * olayları aynı partition'a düşer. Bir gönderim başarısız olduğunda tur sonlandırılır
  * ki o siparişin sonraki olayları öne geçmesin.
  *
+ * <p>Mesaj gövdesi Avro ile serileştirilmiş baytlardır; ilk beş bayt şemanın
+ * Schema Registry'deki kimliğini taşır (ADR-0008). Bu sınıf gövdenin içeriğine
+ * hiç bakmaz, olduğu gibi taşır.
+ *
+ * <h2>Debezium devredeyken kapatilir</h2>
+ * Ayni isi Debezium (CDC) de yapabilir: veritabaninin degisiklik gunlugunu okuyup
+ * ayni konuya yazar. Ikisi birden acik olursa her olay iki kez gider. Bu yuzden
+ * sinif {@code kervan.outbox.publisher.enabled} ayarina baglidir; Debezium
+ * kullanilan ortamda bu ayar {@code false} yapilir. Karsilastirma:
+ * {@code infra/docker/debezium/README.md}.
+ *
  * <p>Teslimat <b>en az bir kez</b>'dir: işaretleme öncesi çökme aynı olayı tekrar
  * gönderir. Tüketiciler idempotent olmalıdır ({@link OutboxMessage}).
  */
 @Component
+@ConditionalOnProperty(name = "kervan.outbox.publisher.enabled", havingValue = "true", matchIfMissing = true)
 class OutboxPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxPublisher.class);
 
     private final OutboxRepository outboxRepository;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<String, byte[]> kafkaTemplate;
     private final Clock clock;
     private final String topic;
     private final int batchSize;
@@ -61,7 +74,7 @@ class OutboxPublisher {
     private final Duration sendTimeout;
 
     OutboxPublisher(OutboxRepository outboxRepository,
-                    KafkaTemplate<String, String> kafkaTemplate,
+                    KafkaTemplate<String, byte[]> kafkaTemplate,
                     Clock clock,
                     @Value("${kervan.outbox.topic}") String topic,
                     @Value("${kervan.outbox.batch-size}") int batchSize,

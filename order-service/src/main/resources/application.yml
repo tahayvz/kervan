@@ -21,7 +21,9 @@ spring:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # Gövde outbox tablosunda zaten Avro baytları olarak duruyor; yayıncı onu
+      # olduğu gibi taşır. Serileştirme sipariş yazan transaction'da yapıldı.
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
       # Broker'ların tamamı yazmayı onaylamadan başarı sayma; outbox'ın "gönderildi"
       # işareti ancak gerçekten dayanıklı yazımdan sonra konmalı.
       acks: all
@@ -36,8 +38,21 @@ spring:
           jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
 
 kervan:
+  schema-registry:
+    # Schema Registry'nin kendi varsayılanı 8081'dir ama o port lokalde
+    # catalog-service'in. Konteyner içeride 8081 dinler, dışarıya 8085'ten açılır.
+    url: ${KERVAN_SCHEMA_REGISTRY_URL:http://localhost:8085}
+    # Şemayı uygulamanın kendisi kaydeder. Geliştirmede pratik; üretimde
+    # kapatılmalı, şema denetimden geçmiş ayrı bir adımda yayınlanmalıdır.
+    auto-register: ${KERVAN_SCHEMA_AUTO_REGISTER:true}
+
   outbox:
     topic: kervan.orders.events
+    publisher:
+      # Uygulama içi yayıncı. Debezium (CDC) devreye alındığında false yapılır;
+      # ikisi birden açık olursa her olay iki kez gider.
+      # Karşılaştırma: infra/docker/debezium/README.md
+      enabled: ${KERVAN_OUTBOX_PUBLISHER_ENABLED:true}
     poll-interval-ms: 1000
     batch-size: 100
     # Bu sayıya ulaşan kayıt kenara alınır; kuyruğun başını tıkamaz.
