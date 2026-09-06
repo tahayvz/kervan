@@ -1,0 +1,68 @@
+{
+  "namespace": "com.kervan.contracts.order.v1",
+  "type": "record",
+  "name": "OrderPlaced",
+  "doc": "Siparis olusturuldugunda yayinlanan olay. Servis sinirinin disina cikan sozlesmedir: alanlari yalnizca geriye donuk uyumlu bicimde degisebilir (bkz. SchemaEvolutionTest).",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Siparisin kimligi. Kafka mesaj anahtari olarak da kullanilir; ayni siparisin olaylari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "customerId",
+      "type": "string",
+      "doc": "Siparisi veren musterinin kimligi."
+    },
+    {
+      "name": "totalAmount",
+      "type": {
+        "type": "bytes",
+        "logicalType": "decimal",
+        "precision": 19,
+        "scale": 2
+      },
+      "doc": "Toplam tutar. double DEGIL: kayan nokta para hesabinda yuvarlama hatasi uretir. Avro decimal, degeri olceklenmis tamsayi olarak byte dizisinde tasir; okuyan taraf ayni BigDecimal'i geri elde eder."
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "doc": "ISO 4217 para birimi kodu (TRY, USD). Tutar bu birim olmadan anlamsizdir."
+    },
+    {
+      "name": "items",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "OrderItem",
+          "doc": "Siparisteki tek bir satir.",
+          "fields": [
+            {"name": "productId", "type": "string", "doc": "Katalogtaki urunun kimligi."},
+            {"name": "sku", "type": "string", "doc": "Stok kodu."},
+            {"name": "quantity", "type": "int", "doc": "Adet."},
+            {
+              "name": "unitPrice",
+              "type": {
+                "type": "bytes",
+                "logicalType": "decimal",
+                "precision": 19,
+                "scale": 2
+              },
+              "doc": "Siparis anindaki birim fiyat. Urunun guncel fiyati sonradan degisse bile bu deger degismez."
+            }
+          ]
+        }
+      },
+      "doc": "Siparis satirlari."
+    },
+    {
+      "name": "placedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Siparisin olusturuldugu an (UTC, milisaniye). Instant nanosaniye tutar; buraya yazilirken milisaniyeye kirpilir."
+    }
+  ]
+}

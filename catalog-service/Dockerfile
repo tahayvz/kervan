@@ -16,6 +16,7 @@ COPY pom.xml .
 # Parent POM tum modulleri listeler; Maven reactor'u kurabilmek icin
 # HEPSININ POM'u gerekir, derlenen tek modul olsa bile. Yeni modul eklenince
 # bu satirlar guncellenmezse imaj derlemesi kirilir (testler yesil kalir).
+COPY event-contracts/pom.xml event-contracts/pom.xml
 COPY catalog-service/pom.xml catalog-service/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml

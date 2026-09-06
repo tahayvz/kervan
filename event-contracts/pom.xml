@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      event-contracts — servisler arasi olay sozlesmeleri (Faz 3).
+
+      Bu modul CALISAN bir uygulama degildir; yalnizca Avro semalari ve onlardan
+      uretilen Java siniflarini barindirir. Uygulama kodu icermez.
+
+      NEDEN AYRI MODUL?
+      Olay, iki servisin ustunde anlastigi sozlesmedir. Sema yayinlayan servisin
+      icinde dursaydi, tuketen servis onu okumak icin yayinlayanin tum kodunu
+      bagimlilik olarak cekerdi. Boylece "gevsek bagli" olmasi gereken iki servis
+      derleme zamaninda birbirine kilitlenirdi. Sema ortada durunca her iki taraf
+      da yalnizca sozlesmeye bagimli olur.
+
+      Karar gerekcesi: docs/adr/0008-avro-schema-registry.md
+    -->
+
+    <parent>
+        <groupId>com.kervan</groupId>
+        <artifactId>kervan-platform</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>event-contracts</artifactId>
+    <name>Kervan Event Contracts</name>
+    <description>Servisler arasi Avro olay semalari</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+              src/main/avro altindaki .avsc dosyalarindan Java siniflari uretir.
+              Siniflar elle yazilmaz: semayi degistirip sinifi guncellemeyi
+              unutmak mumkun olmasin diye tek kaynak sema dosyasidir.
+            -->
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${avro.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>${project.basedir}/src/main/avro</sourceDirectory>
+                            <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+                            <!-- Varsayilan CharSequence yerine String uret: cagiran kod equals/switch kullanabilsin -->
+                            <stringType>String</stringType>
+                            <!-- decimal logical type'i BigDecimal'e cevir; olmazsa ham ByteBuffer gelir -->
+                            <enableDecimalLogicalType>true</enableDecimalLogicalType>
+                            <fieldVisibility>PRIVATE</fieldVisibility>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

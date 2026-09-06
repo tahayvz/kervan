@@ -1,0 +1,19 @@
+{
+  "doc": "v1 eksi currency. Yeni sema ile yazilan veriyi ESKI okuyucu okuyamaz: currency alani icin deger yoktur. Ileriye uyumsuzdur.",
+  "namespace": "com.kervan.contracts.order.v1",
+  "type": "record",
+  "name": "OrderPlaced",
+  "fields": [
+    {"name": "orderId", "type": "string"},
+    {"name": "customerId", "type": "string"},
+    {"name": "totalAmount", "type": {"type": "bytes", "logicalType": "decimal", "precision": 19, "scale": 2}},
+    {"name": "items", "type": {"type": "array", "items": {
+      "type": "record", "name": "OrderItem", "fields": [
+        {"name": "productId", "type": "string"},
+        {"name": "sku", "type": "string"},
+        {"name": "quantity", "type": "int"},
+        {"name": "unitPrice", "type": {"type": "bytes", "logicalType": "decimal", "precision": 19, "scale": 2}}
+      ]}}},
+    {"name": "placedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}}
+  ]
+}

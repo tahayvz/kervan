@@ -1,0 +1,21 @@
+{
+  "doc": "v1 + kupon kodu, ama VARSAYILANI YOK. Eski veriyi okurken bu alan icin konulacak deger bulunamaz: geriye uyumsuzdur. Schema Registry BACKWARD modunda bu semayi reddeder.",
+  "namespace": "com.kervan.contracts.order.v1",
+  "type": "record",
+  "name": "OrderPlaced",
+  "fields": [
+    {"name": "orderId", "type": "string"},
+    {"name": "customerId", "type": "string"},
+    {"name": "totalAmount", "type": {"type": "bytes", "logicalType": "decimal", "precision": 19, "scale": 2}},
+    {"name": "currency", "type": "string"},
+    {"name": "items", "type": {"type": "array", "items": {
+      "type": "record", "name": "OrderItem", "fields": [
+        {"name": "productId", "type": "string"},
+        {"name": "sku", "type": "string"},
+        {"name": "quantity", "type": "int"},
+        {"name": "unitPrice", "type": {"type": "bytes", "logicalType": "decimal", "precision": 19, "scale": 2}}
+      ]}}},
+    {"name": "placedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "couponCode", "type": "string"}
+  ]
+}

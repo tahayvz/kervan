@@ -32,8 +32,11 @@
       Servis modülleri fazlar geldikçe buraya eklenir.
       Faz 1: catalog-service (MongoDB üzerinde ilk mikroservis).
       Faz 3: order-service (PostgreSQL + Transactional Outbox → Kafka).
+      Faz 3: event-contracts (servisler arası Avro olay şemaları) — ÖNCE derlenmeli,
+             çünkü diğer modüller ona bağımlı.
     -->
     <modules>
+        <module>event-contracts</module>
         <module>catalog-service</module>
         <module>order-service</module>
         <module>api-gateway</module>
@@ -48,7 +51,15 @@
         <spring-cloud.version>2024.0.1</spring-cloud.version>
         <testcontainers.version>1.20.6</testcontainers.version>
         <springdoc.version>2.8.5</springdoc.version>
-        <avro.version>1.12.0</avro.version>
+        <!--
+          Avro sürümü Confluent'ınkiyle AYNI tutulur. Confluent 7.8.0'ın kendi
+          bağımlılığı Avro 1.11.4'tür; şemadan kod üreten eklenti farklı bir sürüm
+          kullanırsa üretilen sınıflar çalışma zamanındaki Avro ile uyuşmayabilir.
+          Confluent sürümü yükseltilirken bu satır da birlikte güncellenmelidir.
+          1.11.4 aynı zamanda CVE-2024-47561'i (şema ayrıştırmada kod çalıştırma)
+          kapatan sürümdür; daha eskiye inilmemelidir.
+        -->
+        <avro.version>1.11.4</avro.version>
         <confluent.version>7.8.0</confluent.version>
         <resilience4j.version>2.2.0</resilience4j.version>
         <mongock.version>5.5.0</mongock.version>
