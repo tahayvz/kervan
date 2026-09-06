@@ -68,12 +68,59 @@ POST /api/v1/orders
 Kafka'ya `aggregateId` anahtarıyla yazılır: aynı siparişin olayları aynı partition'a
 düşer, o sipariş için sıra korunur.
 
+## Olay biçimi: Avro + Schema Registry
+
+Olay, servisin dışına çıkan bir sözleşmedir. Şemalar bu serviste değil, ortak
+[`event-contracts`](../event-contracts/README.md) modülünde durur; olayı tüketen servis
+o modüle bağlanır, bu servise değil.
+
+Serileştirme **sipariş yazan transaction'ın içinde** yapılır ve sonuç `outbox_messages`
+tablosuna ikili (`bytea`) olarak yazılır:
+
+```
+OrderPlaced (domain) ──▶ OrderPlacedAvroMapper ──▶ Avro ──▶ [0x00][şema kimliği][gövde]
+                                                       │
+                          Schema Registry ◀── kaydet ──┘
+```
+
+Şemanın kendisi mesajda taşınmaz, yalnızca kimliği. Okuyan taraf şemayı Registry'den
+bir kez çeker.
+
+Serileştirme neden transaction'ın içinde? Şema Registry tarafından reddedilirse
+(uyumsuz bir değişiklik yapılmışsa) sipariş de yazılmaz. Kimsenin duymayacağı bir
+sipariş oluşturmaktansa isteği reddetmek doğrudur.
+
+Para alanları Avro `decimal` ile taşınır, `double` ile değil: kayan noktada kuruş
+yuvarlanır ve fatura yanlış çıkar.
+
+Karar kaydı: [ADR-0008](../docs/adr/0008-avro-schema-registry.md)
+
+## Olayı Kafka'ya kim taşır?
+
+Outbox, olayı siparişle aynı transaction'da tabloya yazar. Tablodan alıp Kafka'ya
+götüren birinin olması gerekir. İki yol var ve ikisi de bu depoda:
+
+| | `OutboxPublisher` (uygulama içi) | Debezium (CDC) |
+|---|---|---|
+| Nasıl okur | Tabloyu periyodik sorgular | Veritabanının değişiklik günlüğünü (WAL) okur |
+| Veritabanı yükü | Her turda sorgu, boşta bile | Yok |
+| Gecikme | Tur aralığı kadar | Neredeyse anlık |
+| Uygulama kodu | Kafka istemcisi taşır | Kafka'ya hiç dokunmaz |
+| İşletim | Ek bileşen yok | Kafka Connect ayakta tutulmalı |
+
+Hangisinin çalışacağı `kervan.outbox.publisher.enabled` ile seçilir. Debezium
+devredeyken uygulama içi yayıncı **kapatılmalıdır**; ikisi birden açıksa aynı olay
+iki kez gider. Ayarın bean'i gerçekten kaldırdığı testle sabitlendi
+(`OutboxPublisherRegistrationTest`).
+
+Konektör ayarları ve işletim notları: [`infra/docker/debezium/README.md`](../infra/docker/debezium/README.md)
+
 ## Katmanlar
 
 ```
 domain/          Order, OrderLine, Money, OrderStatus, OutboxMessage + portlar
 application/     OrderService (use-case'ler), komutlar
-infrastructure/  JPA adaptörleri, outbox yayıncısı, Flyway şeması
+infrastructure/  JPA adaptörleri, outbox yayıncısı, Avro serileştirici, Flyway şeması
 web/             REST controller, DTO'lar, RFC 7807 hata yönetimi
 ```
 
@@ -104,7 +151,7 @@ curl -X POST http://localhost:8082/api/v1/orders \
 ## Çalıştırma
 
 ```bash
-docker compose -f ../infra/docker/docker-compose.yml up -d postgres kafka
+docker compose -f ../infra/docker/docker-compose.yml up -d postgres kafka schema-registry
 ```
 
 ```bash
@@ -119,18 +166,29 @@ Servis `http://localhost:8082`, OpenAPI arayüzü `/swagger-ui.html`.
 mvn -pl order-service test
 ```
 
-65 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
+95 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
 sipariş toplamı), use-case testleri (mock port'larla), yayıncı testleri (anahtarlama,
-başarısız gönderimde işaretlememe, deneme sayacı, turun durması) ve gerçek PostgreSQL +
-Kafka container'larına karşı çalışan uçtan uca akış testi — siparişin outbox üzerinden
-Kafka'ya ulaştığını ve yayınlandı olarak işaretlendiğini doğrular.
+başarısız gönderimde işaretlememe, deneme sayacı, turun durması), Avro serileştirici
+testleri (kablo biçimi, şemanın hangi ad altında kaydedildiği, ölçeği bozuk tutarın
+reddi) ve gerçek PostgreSQL + Kafka container'larına karşı çalışan uçtan uca akış testi
+— sipariş outbox üzerinden Kafka'ya ulaşır ve tüketici onu Avro şemasıyla çözer.
+
+Ayrıca bir **CDC testi** var: PostgreSQL + Kafka + Kafka Connect container'larını
+ayağa kaldırır, depodaki gerçek konektör ayar dosyasını yükler ve yalnızca outbox
+tablosuna satır yazarak olayın konuya düşmesini bekler. Uygulama o test sırasında hiç
+çalışmaz — Debezium devredeyken uygulamanın Kafka'ya dokunmaması gerektiği için.
 
 Entegrasyon testleri Testcontainers kullanır; Docker çalışıyor olmalıdır.
 
 ## Şema
 
-Şema Flyway ile yönetilir (`db/migration/V1__order_schema.sql`); Hibernate
-`ddl-auto: validate` ile yalnızca doğrular, tabloya dokunmaz.
+Şema Flyway ile yönetilir (`db/migration/`); Hibernate `ddl-auto: validate` ile
+yalnızca doğrular, tabloya dokunmaz.
+
+`V3`, payload sütununu `TEXT`'ten `BYTEA`'ya çevirir. Migration, tabloda yayınlanmamış
+kayıt varsa **bilerek hata verir**: eski kayıtlar JSON'dur, baytlara çevrilseler bile
+Avro olarak okunamazlar. Doğru sıra, eski sürüm outbox'ı boşaltana kadar beklemek ve
+sonra dağıtmaktır. Sessizce bozuk veri üretmektense dağıtımı durdurmak tercih edildi.
 
 `outbox_messages` üzerindeki kısmi indeks yalnızca `published_at IS NULL` satırları
 kapsar: yayınlanmış milyonlarca kayıt indekste yer kaplamaz, yayıncının sorgusu sabit

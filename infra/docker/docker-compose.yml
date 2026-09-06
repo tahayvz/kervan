@@ -7,8 +7,9 @@
 #
 # Sonraki fazlarda bu dosya büyüyecek:
 #   Faz 2 → Keycloak (eklendi)
-#   Faz 3 → Kafka (eklendi) + Schema Registry + Debezium (Kafka Connect; Mongo change
-#           streams için Mongo replica set moduna alınacak)
+#   Faz 3 → Kafka (eklendi) + Schema Registry (eklendi) + Debezium/Kafka Connect
+#           (eklendi; Postgres WAL). Mongo change streams için Mongo replica set
+#           moduna alınacak — sonraki adım.
 #   Faz 5 → Elasticsearch + Redis
 #   Faz 6 → Prometheus + Grafana + Jaeger + Loki
 #
@@ -22,6 +23,11 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: kervan-postgres
+    # Debezium, tabloyu sorgulamaz; veritabaninin kendi degisiklik gunlugunu (WAL)
+    # okur. Varsayilan wal_level=replica bu gunluge satirin ICERIGINI yazmaz,
+    # yalnizca fiziksel blok degisikligini. logical seviyesinde satirlar mantiksal
+    # olarak cozulebilir hale gelir; CDC'nin calismasi buna baglidir.
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=4", "-c", "max_wal_senders=4"]
     environment:
       POSTGRES_USER: kervan
       POSTGRES_PASSWORD: kervan
@@ -90,6 +96,80 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  # Olay semalarinin kayit defteri — ADR-0008. Uretici semayi buraya kaydeder,
+  # mesajin icine yalnizca semanin kimligini yazar; tuketici semayi buradan ceker.
+  # Uyumsuz bir sema degisikligi burada reddedilir, calisan sistemde degil.
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.8.0
+    container_name: kervan-schema-registry
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      # Semalar Kafka'da bir konuda saklanir; Registry durumsuzdur, ayri bir
+      # veritabani istemez.
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: _schemas
+      # BACKWARD: yeni sema, eski semayla yazilmis veriyi okuyabilmelidir.
+      # Bu kural sayesinde once tuketici, sonra uretici guncellenebilir.
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward
+    ports:
+      # 8081 konteyner icinde; disarida catalog-service'te oldugu icin 8085.
+      - "8085:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/subjects >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Debezium (Kafka Connect uzerinde) — ADR-0004.
+  #
+  # NE YAPAR: Postgres'in degisiklik gunlugunu (WAL) okur ve outbox_messages
+  # tablosuna dusen satirlari Kafka'ya tasir. Uygulama Kafka'ya hic dokunmaz;
+  # yalnizca kendi veritabanina yazar. Dual-write problemi boylece kokten kalkar.
+  #
+  # BAGLANTI KONEKTORU ELLE KAYDEDILIR (bkz. debezium/README.md):
+  #   curl -X POST -H 'Content-Type: application/json' \
+  #        --data @infra/docker/debezium/order-outbox-connector.json \
+  #        http://localhost:8083/connectors
+  connect:
+    image: quay.io/debezium/connect:3.0.0.Final
+    container_name: kervan-connect
+    # Imajin ARM surumundeki Java calisma zamani bazi Mac'lerde ilk yerel cagrida
+    # cokuyor (SIGILL, System.registerNatives). Bu, buradaki ayarlardan bagimsizdir.
+    # amd64 surumu her yerde calisir: Linux'ta yerel, Apple Silicon'da emulasyonla.
+    # Ayrinti: debezium/README.md
+    platform: linux/amd64
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: kervan-connect
+      # Connect kendi durumunu Kafka'da tutar: konektor ayarlari, okunan WAL
+      # konumu (offset) ve gorev durumu. Konteyner yeniden basladiginda kaldigi
+      # yerden devam etmesini bunlar saglar.
+      CONFIG_STORAGE_TOPIC: _connect_configs
+      OFFSET_STORAGE_TOPIC: _connect_offsets
+      STATUS_STORAGE_TOPIC: _connect_status
+      # Tek broker var; replikasyon yapacak ikinci dugum yok.
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/connectors >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
     restart: unless-stopped
 
   # Kimlik saglayici — ADR-0001. order-service token uretmez, yalnizca dogrular.

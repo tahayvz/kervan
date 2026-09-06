@@ -54,3 +54,29 @@ COMMIT
   bileşen ekler; outbox tablosu temizliği (retention) gerekir.
 - **Risk:** Debezium connector yapılandırması (WAL, replication slot) doğru
   kurulmalı; Faz 3'te Testcontainers ile uçtan uca doğrulanır.
+
+## Uygulama notu (Faz 3, 2026-09)
+
+Karar uygulandı. Eklenen ayrıntılar:
+
+- **İki taşıyıcı da depoda.** Uygulama içi `OutboxPublisher` (polling) ile Debezium
+  aynı Kafka konusuna yazar. Hangisinin çalışacağı `kervan.outbox.publisher.enabled`
+  ile seçilir. Amaç yalnızca karşılaştırma değil, geçiş güvenliği: Debezium'a geçiş
+  bir ayar değişikliğidir ve geri alınabilir. İkisi birden açık olursa her olay iki
+  kez gider; bu yüzden ayarın bean'i gerçekten kaldırdığı testle sabitlendi.
+
+- **Payload ikili (`bytea`), metin değil.** Olay Avro ile serileştirilir (ADR-0008) ve
+  outbox satırına baytlar yazılır. Böylece Debezium `ByteArrayConverter` ile gövdeyi
+  **hiç yorumlamadan** taşır. Payload JSON olsaydı, Connect'in şemayı çıkarım yoluyla
+  üretmesi gerekirdi ve o şema `event-contracts`'taki yazılı sözleşme olmazdı.
+
+- **Konu adı sabit.** EventRouter normalde konu adını `aggregate_type`'tan türetir;
+  burada `kervan.orders.events` olarak sabitlendi ki iki taşıyıcı aynı konuya yazsın
+  ve geçiş tüketicileri etkilemesin.
+
+- **Retention hâlâ açık.** Debezium satırı okuduktan sonra kimse `published_at`
+  damgalamaz; tablo büyümeye devam eder. Temizlik işi henüz yazılmadı.
+
+- **Doğrulama:** `OutboxCdcIntegrationTest`, depodaki gerçek konektör ayar dosyasını
+  yükler, Postgres + Kafka + Kafka Connect container'larını ayağa kaldırır ve yalnızca
+  veritabanına satır yazarak olayın konuya düşmesini bekler. Uygulama hiç çalışmaz.

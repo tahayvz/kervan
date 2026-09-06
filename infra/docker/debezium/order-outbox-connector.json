@@ -1,0 +1,35 @@
+{
+  "name": "kervan-order-outbox",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "kervan",
+    "database.password": "kervan",
+    "database.dbname": "orders",
+
+    "topic.prefix": "kervan",
+
+    "plugin.name": "pgoutput",
+    "slot.name": "kervan_order_outbox",
+    "publication.name": "kervan_order_outbox_pub",
+
+    "table.include.list": "public.outbox_messages",
+    "binary.handling.mode": "bytes",
+    "tombstones.on.delete": "false",
+
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.table.field.event.id": "id",
+    "transforms.outbox.table.field.event.key": "aggregate_id",
+    "transforms.outbox.table.field.event.type": "event_type",
+    "transforms.outbox.table.field.event.payload": "payload",
+    "transforms.outbox.table.expand.json.payload": "false",
+    "transforms.outbox.route.by.field": "aggregate_type",
+    "transforms.outbox.route.topic.replacement": "kervan.orders.events",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter"
+  }
+}

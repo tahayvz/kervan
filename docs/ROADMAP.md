@@ -86,14 +86,14 @@ açar. Event-driven mimari bunu çözer — ama "dual write" problemi (DB + Kafk
 anda yazma) ele alınmazsa veri tutarsız kalır.
 
 **Ne inşa edilecek:**
-- **Apache Kafka** + **Confluent Schema Registry**
-- **Apache Avro** ile şemalı event'ler (geriye/ileriye uyumluluk)
+- **Apache Kafka** + **Confluent Schema Registry** — ✅ yapıldı
+- **Apache Avro** ile şemalı event'ler (geriye/ileriye uyumluluk) — ✅ yapıldı
 - **Transactional Outbox** deseni: event, iş verisiyle **aynı transaction**'da
-  outbox tablosuna yazılır
+  outbox tablosuna yazılır — ✅ yapıldı
 - **Debezium** (CDC): değişiklikleri okuyup Kafka'ya taşır — "dual write" problemi
-  kökten çözülür. **İki kaynak:** Postgres (WAL, outbox tablosu) + MongoDB (change
-  streams, Catalog) — aynı desen, iki farklı depo (ADR-0006)
-- Ortak `event-contracts` modülü (Avro şemaları tek yerde)
+  kökten çözülür. **İki kaynak:** Postgres (WAL, outbox tablosu) — ✅ yapıldı;
+  MongoDB (change streams, Catalog) — sırada. Aynı desen, iki farklı depo (ADR-0006)
+- Ortak `event-contracts` modülü (Avro şemaları tek yerde) — ✅ yapıldı
 
 **Kazanım:** Dual-write problemi Transactional Outbox + Debezium CDC ile çözülür;
 event'ler Avro + Schema Registry ile şemalanıp geriye dönük uyumluluk garanti edilir.

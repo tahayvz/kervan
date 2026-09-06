@@ -43,8 +43,10 @@ marked done unless its code and tests are in this repository.
 | 1 | **Catalog Service** — MongoDB, Mongock migrations, OpenAPI, Testcontainers | ✅ Done |
 | 3a | **Order Service + Transactional Outbox → Kafka** | ✅ Done |
 | 2a | **JWT security — OAuth2 resource server, roles, record-level ownership** | ✅ Done |
-| 2b | API Gateway (Spring Cloud Gateway) | Planned |
-| 3b | Avro + Schema Registry + Debezium CDC | Planned |
+| 2b | **API Gateway (Spring Cloud Gateway)** — one front door, central authentication | ✅ Done |
+| 3b | **Avro + Confluent Schema Registry** — versioned event contracts, compatibility enforced in tests | ✅ Done |
+| 3c | **Debezium CDC — PostgreSQL WAL + outbox routing** | ✅ Done |
+| 3d | Debezium CDC — MongoDB change streams (Catalog) | Planned |
 | 4 | Order / Payment / Inventory + Saga orchestration | Planned |
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
@@ -201,6 +203,20 @@ removes the question: both exist, or neither does.
 The trade-off is at-least-once delivery — a crash after publishing but before marking
 the row sends the event twice, so consumers must be idempotent.
 
+Something still has to carry the row from the table to Kafka, and there are two ways to
+do it. Both are in this repository. The in-process publisher polls the table; **Debezium**
+reads the database's own write-ahead log instead — no query load, near-zero latency, and
+the application never touches Kafka at all. Which one runs is a single setting
+(`kervan.outbox.publisher.enabled`), so moving to CDC is a config change and is
+reversible. Running both would send every event twice, so a test pins down that the
+setting really removes the bean.
+
+The connector's configuration is a JSON file, which the compiler cannot check — a
+mistyped field name breaks nothing at build time and silently stops the flow. So the
+integration test loads **that same file**, starts PostgreSQL, Kafka and Kafka Connect,
+writes one row to the outbox table, and waits for the event on the topic. The
+application is not running during that test; that is the point.
+
 - **PostgreSQL + Flyway** — schema is versioned; Hibernate runs with `ddl-auto: validate`
   and never touches the tables
 - **Partial index** on unpublished rows only, so the publisher's query stays cheap as
@@ -209,6 +225,36 @@ the row sends the event twice, so consumers must be idempotent.
   and asserts the event actually arrives
 
 Service documentation: [order-service/README.md](order-service/README.md)
+
+---
+
+### Event contracts — Avro + Schema Registry
+
+The event that leaves this service is a contract with services that are deployed
+separately. They are never upgraded at the same moment, so for a while an old producer
+and a new consumer run side by side. A format that cannot survive that turns every
+deployment into an outage.
+
+Events are serialised with **Avro**; the schemas live in one module,
+[`event-contracts`](event-contracts/README.md), and the Java classes are generated from
+them. **Confluent Schema Registry** stores each schema and rejects a new version that
+would break the old one. Compatibility mode is `BACKWARD`: a new schema must still read
+data written by the previous one, which is what lets the consumer be upgraded first.
+
+```
+OrderPlaced.avsc ──generate──▶ Java class ──serialise──▶ [0x00][schema id][body]
+                                                                    │
+        Schema Registry ◀── register ────────────────────────────────┘
+```
+
+The message carries the schema **id**, not the schema, so the payload stays small and the
+consumer fetches the schema once. Money is carried as Avro `decimal`, not `double` — a
+floating point kuruş is a wrong invoice.
+
+The registry's rule is also asserted at build time. `SchemaEvolutionTest` proves that
+adding an optional field with a default is safe in both directions, and that adding a
+field without a default, or removing a field, is not. An incompatible change fails CI
+instead of a running consumer.
 
 ---
 
@@ -225,13 +271,13 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Transactional persistence | PostgreSQL + Flyway | ✅ |
 | Async messaging | Apache Kafka | ✅ |
 | Transactional Outbox | own implementation | ✅ |
-| Schema management | Confluent Schema Registry + Avro | planned |
-| Change data capture | Debezium | planned |
+| Schema management | Confluent Schema Registry + Avro | ✅ |
+| Change data capture | Debezium (PostgreSQL WAL) | ✅ |
 | Saga orchestration | | planned |
 | Search | Elasticsearch | planned |
 | Cache / locking / rate limiting | Redis | planned |
-| API gateway | Spring Cloud Gateway | planned |
-| Identity | Keycloak (OAuth2 / OIDC / JWT) | planned |
+| API gateway | Spring Cloud Gateway | ✅ |
+| Identity | Keycloak (OAuth2 / OIDC / JWT) | ✅ |
 | Resilience | Resilience4j | planned |
 | Observability | OpenTelemetry, Prometheus, Grafana, Jaeger, Loki | planned |
 | Orchestration | Kubernetes + Helm | planned |
