@@ -47,7 +47,9 @@ marked done unless its code and tests are in this repository.
 | 3b | **Avro + Confluent Schema Registry** — versioned event contracts, compatibility enforced in tests | ✅ Done |
 | 3c | **Debezium CDC — PostgreSQL WAL + outbox routing** | ✅ Done |
 | 3d | **Debezium CDC — MongoDB change streams (Catalog)** | ✅ Done |
-| 4 | Order / Payment / Inventory + Saga orchestration | Planned |
+| 4a | **Saga message contracts + topic topology** | ✅ Done |
+| 4b | **Inventory Service — stock reservation, idempotent consumer, compensation** | ✅ Done |
+| 4c | Payment Service + saga orchestrator | Planned |
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
@@ -242,6 +244,37 @@ Service documentation: [order-service/README.md](order-service/README.md)
 
 ---
 
+### Inventory Service
+
+Runs the saga's first step: it reserves stock for an order, and releases the
+reservation when payment fails. It has no REST API — this service talks in messages.
+
+Stock is kept as two numbers, available and reserved, rather than one. With a single
+number there would be no way to know how much to give back when the saga compensates;
+reserving moves quantity between the two rather than destroying it.
+
+**Idempotency comes from the work itself, not from a side table.** Delivery is
+at-least-once, so the same command can arrive twice. The usual answer is a table of
+processed message ids. Here the domain already has a natural key — an order has at most
+one reservation — and that rule lives as a unique constraint. A second table would be a
+copy of a rule that already exists, needing its own cleanup and its own correctness.
+
+If one line of an order is short, **nothing** is reserved. Reserving the first and
+stopping at the second would lock a product for a customer who is not getting the order.
+
+When stock is short the exception does not escape. If it did, the transaction would roll
+back and take the "stock was short" event with it, leaving the saga waiting forever for
+an answer that no longer exists. Instead stock is left untouched and only the failure
+event is written — both in the same commit.
+
+Stock rows are locked with `SELECT ... FOR UPDATE`, always in SKU order. Two orders
+holding overlapping products in different orders would each wait on the other; a fixed
+order makes that deadlock structurally impossible rather than something to retry around.
+
+Service documentation: [inventory-service/README.md](inventory-service/README.md)
+
+---
+
 ### Event contracts — Avro + Schema Registry
 
 The event that leaves this service is a contract with services that are deployed
@@ -288,7 +321,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Transactional Outbox | own implementation | ✅ |
 | Schema management | Confluent Schema Registry + Avro | ✅ |
 | Change data capture | Debezium (PostgreSQL WAL + MongoDB change streams) | ✅ |
-| Saga orchestration | | planned |
+| Saga orchestration | own implementation | in progress |
 | Search | Elasticsearch | planned |
 | Cache / locking / rate limiting | Redis | planned |
 | API gateway | Spring Cloud Gateway | ✅ |

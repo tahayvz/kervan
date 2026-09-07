@@ -1,0 +1,38 @@
+{
+  "name": "kervan-inventory-outbox",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "kervan",
+    "database.password": "kervan",
+    "database.dbname": "inventory",
+
+    "topic.prefix": "kervan-inventory",
+
+    "plugin.name": "pgoutput",
+    "slot.name": "kervan_inventory_outbox",
+    "publication.name": "kervan_inventory_outbox_pub",
+    "publication.autocreate.mode": "filtered",
+
+    "table.include.list": "public.outbox_messages",
+    "binary.handling.mode": "bytes",
+    "tombstones.on.delete": "false",
+    "snapshot.mode": "no_data",
+    "heartbeat.interval.ms": "10000",
+
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.table.field.event.id": "id",
+    "transforms.outbox.table.field.event.key": "aggregate_id",
+    "transforms.outbox.table.field.event.type": "event_type",
+    "transforms.outbox.table.field.event.payload": "payload",
+    "transforms.outbox.table.expand.json.payload": "false",
+    "transforms.outbox.route.by.field": "aggregate_type",
+    "transforms.outbox.route.topic.replacement": "kervan.inventory.events",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter"
+  }
+}

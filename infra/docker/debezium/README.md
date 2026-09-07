@@ -59,6 +59,12 @@ curl -X POST -H 'Content-Type: application/json' \
      http://localhost:8083/connectors
 ```
 
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+     --data @infra/docker/debezium/inventory-outbox-connector.json \
+     http://localhost:8083/connectors
+```
+
 Durumlarını gör:
 
 ```bash
@@ -69,15 +75,18 @@ curl -s http://localhost:8083/connectors/kervan-order-outbox/status | jq
 curl -s http://localhost:8083/connectors/kervan-catalog-products/status | jq
 ```
 
-## İki konektör, iki farklı iş
+## Üç konektör, iki farklı iş
 
-| | `kervan-order-outbox` (PostgreSQL) | `kervan-catalog-products` (MongoDB) |
-|---|---|---|
-| Kaynak | `outbox_messages` tablosu | `products` koleksiyonu |
-| Ne okur | WAL (write-ahead log) | change streams (oplog) |
-| Taşıdığı şey | Uygulamanın yazdığı **domain olayı** | Belgenin **kendisi** |
-| Sözleşme | `event-contracts` (Avro, sürümlü) | Debezium change event (JSON) |
-| Konu | `kervan.orders.events` | `kervan.catalog.products` |
+| | `kervan-order-outbox` | `kervan-inventory-outbox` | `kervan-catalog-products` |
+|---|---|---|---|
+| Kaynak | `orders` DB, outbox tablosu | `inventory` DB, outbox tablosu | `catalog` DB, `products` koleksiyonu |
+| Ne okur | WAL | WAL | change streams (oplog) |
+| Taşıdığı şey | **domain olayı** | **domain olayı** | Belgenin **kendisi** |
+| Sözleşme | `event-contracts` (Avro) | `event-contracts` (Avro) | Debezium change event (JSON) |
+| Konu | `kervan.orders.events` | `kervan.inventory.events` | `kervan.catalog.products` |
+
+İlk ikisi aynı desendir, yalnızca kaynak veritabanı farklı. Üçüncüsü farklı bir iş
+yapar:
 
 **Bu fark bilinçli.** Outbox, "şu iş oldu" diyen bir olay yayınlamak içindir; olayın
 biçimi servislerin üzerinde anlaştığı bir sözleşmedir ve tek yerde yazılıdır.

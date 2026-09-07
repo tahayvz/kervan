@@ -114,6 +114,8 @@ dağıtık transaction (2PC) ölçeklenmez. Çözüm: **Saga** (telafi edici iş
   ConfirmOrder; herhangi bir adım başarısızsa **compensation** (StockReleased,
   PaymentRefunded, OrderCancelled)
   - Mesaj sözleşmeleri ve konu topolojisi — ✅ yapıldı (ADR-0009)
+  - `inventory-service` (stok ayırma + telafi) — ✅ yapıldı
+  - `payment-service` ve orchestrator — sırada
 - İdempotent tüketici (aynı event iki kez işlenmez)
 - Durum makinesi (state machine) ile sipariş yaşam döngüsü
 

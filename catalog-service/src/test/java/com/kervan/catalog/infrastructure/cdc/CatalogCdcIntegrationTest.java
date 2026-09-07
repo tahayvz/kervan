@@ -1,7 +1,5 @@
 package com.kervan.catalog.infrastructure.cdc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -59,12 +57,9 @@ class CatalogCdcIntegrationTest {
     private static final String TOPIC = "kervan.catalog.products";
     private static final String DATABASE = "catalog";
     private static final String COLLECTION = "products";
-    private static final String CONNECTOR_NAME = "kervan-catalog-products";
 
     private static final Path CONNECTOR_CONFIG =
             Path.of("../infra/docker/debezium/catalog-products-connector.json");
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final Network NETWORK = Network.newNetwork();
 
@@ -117,7 +112,7 @@ class CatalogCdcIntegrationTest {
         startConnectOrSkipLocally();
 
         registerConnector();
-        awaitConnectorRunning();
+        awaitChangeStreamOpen();
     }
 
     @Test
@@ -226,26 +221,30 @@ class CatalogCdcIntegrationTest {
     }
 
     /**
-     * Görev çalışmaya başlayana kadar bekler.
+     * Değişim akışının gerçekten açıldığını kanıtlayana kadar bekler.
      *
      * <p>{@code snapshot.mode=no_data} olduğu için konektör koleksiyonu taramaz;
-     * yalnızca akışa bağlandıktan sonraki değişiklikleri görür. Önce yazılan bir
-     * belge hiç yayınlanmaz ve test rastgele kırılırdı.
+     * yalnızca akışa bağlandıktan <b>sonraki</b> değişiklikleri görür. Akış açılmadan
+     * yazılan belge hiç yayınlanmaz.
+     *
+     * <p><b>Önce görevin {@code RUNNING} olmasını beklemekle yetiniyordum. Yetmiyor:</b>
+     * görev "başladım" der ama değişim akışına henüz bağlanmamış olabilir. Test bu
+     * yüzden ara sıra "olay gelmedi" diye kırıldı — bir kez gerçekten kırıldı.
+     *
+     * <p>Tek kesin kanıt, akıştan bir olayın <b>gelmesidir</b>. Bu yüzden akış açılana
+     * kadar deneme belgesi yazılır; ilk olay geldiğinde akışın açık olduğu kanıtlanmış
+     * olur ve asıl testler güvenle çalışabilir. Deneme belgeleri testlerin aradığı
+     * kimliklerle çakışmaz.
      */
-    private static void awaitConnectorRunning() {
-        await().atMost(Duration.ofSeconds(60)).until(() -> {
-            HttpResponse<String> status = HttpClient.newHttpClient().send(
-                    HttpRequest.newBuilder()
-                            .uri(connectUri("/connectors/" + CONNECTOR_NAME + "/status"))
-                            .GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
+    private static void awaitChangeStreamOpen() {
+        try (KafkaConsumer<String, String> consumer = consumer()) {
+            consumer.subscribe(List.of(TOPIC));
 
-            // JSON düzgün ayrıştırılıyor: metin bölerek aramak, alanların sırasına
-            // bel bağlamak olurdu ve o sıra bir garanti değil.
-            JsonNode tasks = JSON.readTree(status.body()).path("tasks");
-            return tasks.isArray() && !tasks.isEmpty()
-                    && "RUNNING".equals(tasks.get(0).path("state").asText());
-        });
+            await().atMost(Duration.ofSeconds(90)).until(() -> {
+                insertProduct("PROBE-" + UUID.randomUUID());
+                return pollForContaining(consumer, "PROBE-") != null;
+            });
+        }
     }
 
     private static URI connectUri(String path) {

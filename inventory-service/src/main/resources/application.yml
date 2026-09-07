@@ -1,0 +1,72 @@
+server:
+  # 8080 Keycloak, 8081 catalog, 8082 order, 8083 Kafka Connect, 8085 Schema Registry.
+  port: 8084
+
+spring:
+  application:
+    name: inventory-service
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/inventory}
+    username: ${SPRING_DATASOURCE_USERNAME:kervan}
+    password: ${SPRING_DATASOURCE_PASSWORD:kervan}
+
+  jpa:
+    hibernate:
+      # Şema Flyway'in sorumluluğunda; Hibernate tabloya dokunmaz.
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    # Üretici YALNIZCA ölü mektup konusu (DLT) için var. İş olayları Kafka'ya buradan
+    # değil, outbox üzerinden Debezium ile gider (ADR-0004). DLT işletim kanalıdır:
+    # kimse onu iş akışı olarak tüketmez, insan bakar.
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      properties:
+        schema.registry.url: ${KERVAN_SCHEMA_REGISTRY_URL:http://localhost:8085}
+        value.subject.name.strategy: io.confluent.kafka.serializers.subject.TopicRecordNameStrategy
+    consumer:
+      group-id: inventory-service
+      # Komutları baştan okur: servis ilk kez ayağa kalktığında bekleyen komutlar
+      # kaybolmasın.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      properties:
+        schema.registry.url: ${KERVAN_SCHEMA_REGISTRY_URL:http://localhost:8085}
+        # Genel amaçlı GenericRecord değil, şemadan üretilen sınıf gelsin: mesaj
+        # tipine göre yönlendirme (@KafkaHandler) buna dayanır.
+        specific.avro.reader: true
+
+kervan:
+  kafka:
+    retry:
+      # Sürekli hata veren mesaj birkaç kez, aralığı açılarak denenir; sonra
+      # <konu>.DLT'ye taşınır ve kuyruk akmaya devam eder. Bkz. KafkaErrorHandlingConfig.
+      initial-interval-ms: 500
+      max-interval-ms: 10000
+      max-elapsed-ms: 30000
+
+  schema-registry:
+    url: ${KERVAN_SCHEMA_REGISTRY_URL:http://localhost:8085}
+    # Şemayı uygulama kaydeder. Üretimde kapatılmalı; şema denetimden geçmiş ayrı
+    # bir adımda yayınlanır.
+    auto-register: ${KERVAN_SCHEMA_AUTO_REGISTER:true}
+
+  inventory:
+    # Saga komutları buradan gelir, olaylar buraya gider (ADR-0009).
+    commands-topic: kervan.inventory.commands
+    events-topic: kervan.inventory.events
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
