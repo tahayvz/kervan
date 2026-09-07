@@ -1,0 +1,12 @@
+-- Temizlik işi için indeks.
+--
+-- Neden: Temizlik "şu tarihten eski kayıtlar" diye sorar. Mevcut kısmi indeks
+-- (idx_outbox_deliverable) yalnızca published_at IS NULL satırları kapsar; bu sorgu
+-- öyle bir koşul içermediği için planlayıcı o indeksi kullanamaz ve tabloyu baştan
+-- sona tarar. Tablo, temizlik sayesinde küçük kalacak — ama o küçüklüğü sağlayan
+-- sorgunun kendisi tarama yapamaz.
+--
+-- Tek indeks iki moda da yetiyor: her iki sorgu da occurred_at üzerinden sınırlanır,
+-- yayıncı modundaki ek published_at koşulu satır sayısını zaten daraltılmış bir
+-- kümede filtreler.
+CREATE INDEX idx_outbox_occurred_at ON outbox_messages (occurred_at);

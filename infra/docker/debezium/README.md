@@ -225,12 +225,42 @@ FROM pg_replication_slots;
 
 `geride_kalan` sürekli büyüyorsa konektör durmuş demektir.
 
-## Henüz yapılmamış: outbox temizliği
+## Outbox temizliği
 
-Uygulama içi yayıncı gönderdiği kaydı `published_at` ile işaretler. Debezium böyle bir
-işaret bırakmaz — satırı WAL'dan okur, tabloya dokunmaz. Yani CDC devredeyken
-`outbox_messages` sürekli büyür.
+Outbox bir kuyruktur ama tablo kendini boşaltmaz. Temizliği `OutboxCleaner` yapar;
+saatte bir çalışır ve saklama penceresinden eski kayıtları siler.
 
-Gerekli olan, belli bir yaştan eski kayıtları silen bir bakım işidir. Ölçüt "yayınlandı
-mı" olamaz, çünkü o bilgi artık tabloda yok; ölçüt yaş olmalıdır ve seçilen süre,
-Debezium'un en uzun durabileceği süreden uzun tutulmalıdır. Henüz yazılmadı.
+Ölçüt, kayıtları kimin taşıdığına göre değişir:
+
+| Taşıyan | Silinen |
+|---|---|
+| Uygulama içi yayıncı | Yalnızca `published_at` damgalı eski kayıtlar |
+| Debezium | Eski kayıtların hepsi |
+
+Sebep: Debezium hiçbir şey damgalamaz — satırı WAL'dan okur, tabloya dokunmaz. Orada
+"yayınlandı mı" diye bakılacak bir işaret yoktur, tek ölçüt yaştır. Yayıncı modunda ise
+damgasız eski bir kayıt *gönderilememiş* demektir; silinmesi olayın kaybolması olurdu.
+
+Hangi modda olunduğunu ayrı bir ayar değil, zaten var olan
+`kervan.outbox.publisher.enabled` söyler. İki ayrı anahtar olsaydı biri değişip
+diğeri unutulabilirdi.
+
+```yaml
+kervan:
+  outbox:
+    cleanup:
+      enabled: true
+      retention: 7d          # bu yaştan eskiler silinir
+      interval-ms: 3600000   # saatte bir
+      batch-size: 1000       # tek turda azami satır
+```
+
+**Saklama penceresi neden geniş?** Debezium modunda ölçüt yaş olduğu için, Debezium
+pencereden daha uzun süre durursa henüz okumadığı satırlar silinir ve o olaylar
+kaybolur. Bu yüzden pencere Debezium'un durabileceği en uzun süreden uzun tutulmalı ve
+durup durmadığı ayrıca izlenmelidir — replication slot'un gecikmesi bunu söyler
+(yukarıdaki sorgu).
+
+**Neden parti parti?** Sınırsız tek bir `DELETE`, tablo büyümüşse milyonlarca satırı
+tek transaction'da siler; tablo o süre boyunca kilitli kalır ve sipariş yazan istekler
+bekler. Bir turda bitmeyen iş bir sonraki turda devam eder.

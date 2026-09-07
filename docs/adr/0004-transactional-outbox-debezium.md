@@ -80,9 +80,14 @@ Karar uygulandı. Eklenen ayrıntılar:
   geçmişinin tamamının yeniden yayınlanması demekti. `no_data` ile konektör mevcut WAL
   konumundan başlar.
 
-- **Retention hâlâ açık.** Debezium satırı okuduktan sonra kimse `published_at`
-  damgalamaz; tablo büyümeye devam eder. Temizlik işi henüz yazılmadı. Ölçüt
-  "yayınlandı mı" olamaz — o bilgi artık tabloda yok — yaş olmalıdır.
+- **Retention yazıldı.** Debezium satırı okuduktan sonra kimse `published_at`
+  damgalamaz, bu yüzden temizliğin ölçütü kimin taşıdığına göre değişir: yayıncı
+  modunda yalnızca damgalı kayıtlar, Debezium modunda eski kayıtların hepsi silinir.
+  Hangi modda olunduğu ayrı bir ayardan değil, zaten var olan
+  `kervan.outbox.publisher.enabled`'dan okunur — iki anahtar olsaydı biri değişip
+  diğeri unutulabilirdi. Yaş ölçütünün bedeli açık: Debezium saklama penceresinden
+  uzun süre durursa okunmamış satırlar silinir. Pencere bu yüzden geniş (7 gün) ve
+  slot gecikmesi izlenmelidir.
 
 - **Doğrulama:** `OutboxCdcIntegrationTest`, depodaki gerçek konektör ayar dosyasını
   yükler, Postgres + Kafka + Kafka Connect container'larını ayağa kaldırır ve yalnızca

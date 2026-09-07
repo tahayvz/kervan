@@ -64,6 +64,18 @@ kervan:
     # Transaction'ın açık kalabileceği süreyi sınırlar (bkz. OutboxPublisher).
     send-timeout: 5s
 
+    cleanup:
+      enabled: ${KERVAN_OUTBOX_CLEANUP_ENABLED:true}
+      # Bu yaştan eski kayıtlar silinir. Debezium devredeyken ölçüt yalnızca yaştır
+      # (orada "yayınlandı" işareti yoktur), bu yüzden pencere Debezium'un
+      # durabileceği en uzun süreden GENİŞ olmalıdır. Bkz. OutboxCleaner.
+      retention: 7d
+      # Saatte bir; temizlik acele bir iş değil.
+      interval-ms: 3600000
+      # Tek turda silinecek azami satır. Sınırsız bir DELETE tabloyu uzun süre
+      # kilitler ve sipariş yazan istekler bekler.
+      batch-size: 1000
+
 server:
   port: 8082
 

@@ -58,4 +58,29 @@ interface SpringDataOutboxRepository extends JpaRepository<OutboxEntity, UUID> {
     void recordFailedAttempt(@Param("id") UUID id,
                              @Param("at") Instant at,
                              @Param("error") String error);
+
+    /**
+     * Silinecek kayıtların kimliklerini seçer.
+     *
+     * <p><b>Neden önce SELECT, sonra DELETE?</b> Tek bir {@code DELETE ... WHERE
+     * occurred_at < ?} ifadesine sınır konamaz. Tablo büyümüşse bu, milyonlarca satırı
+     * tek transaction'da siler: tablo uzun süre kilitli kalır ve sipariş yazan istekler
+     * bekler. Kimlikleri sınırlı sayıda seçip onları silmek, temizliği küçük parçalara
+     * böler — bir turda bitmezse bir sonraki turda devam eder.
+     *
+     * <p>{@code publishedOnly} true iken yalnızca damgalanmış kayıtlar seçilir.
+     */
+    @Query("""
+            SELECT o.id FROM OutboxEntity o
+            WHERE o.occurredAt < :cutoff
+              AND (:publishedOnly = false OR o.publishedAt IS NOT NULL)
+            ORDER BY o.occurredAt ASC
+            """)
+    List<UUID> findExpiredIds(@Param("cutoff") Instant cutoff,
+                              @Param("publishedOnly") boolean publishedOnly,
+                              org.springframework.data.domain.Limit limit);
+
+    @Modifying
+    @Query("DELETE FROM OutboxEntity o WHERE o.id IN :ids")
+    int deleteByIds(@Param("ids") List<UUID> ids);
 }

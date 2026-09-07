@@ -217,6 +217,12 @@ integration test loads **that same file**, starts PostgreSQL, Kafka and Kafka Co
 writes one row to the outbox table, and waits for the event on the topic. The
 application is not running during that test; that is the point.
 
+Nothing marks a row as delivered under CDC, so the table cannot be trimmed by delivery
+status. A cleanup job runs hourly and deletes by age instead — but only under CDC. With
+the in-process publisher it deletes only rows carrying a delivery stamp, because an old
+row without one is an event that never got out. Which rule applies is read from the same
+setting that picks the carrier, so the two cannot drift apart.
+
 The same tool reads the catalogue out of **MongoDB change streams**, so both stores in
 this polyglot setup feed the same log. It is deliberately not the same pattern, though.
 The order side carries a domain event the application chose to publish, with its

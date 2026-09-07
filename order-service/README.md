@@ -116,6 +116,23 @@ iki kez gider. Ayarın bean'i gerçekten kaldırdığı testle sabitlendi
 
 Konektör ayarları ve işletim notları: [`infra/docker/debezium/README.md`](../infra/docker/debezium/README.md)
 
+### Tablo neden büyümüyor?
+
+Outbox bir kuyruktur ama tablo kendini boşaltmaz. `OutboxCleaner` saatte bir çalışır ve
+saklama penceresinden (varsayılan 7 gün) eski kayıtları siler.
+
+Ölçüt, kayıtları kimin taşıdığına göre değişir. Uygulama içi yayıncı devredeyken
+yalnızca `published_at` damgalı kayıtlar silinir; damgasız eski bir kayıt
+gönderilememiş demektir ve silinmesi olayı kaybetmek olurdu. Debezium devredeyken ise
+damga hiç konmaz — tek ölçüt yaştır.
+
+Bunun bedeli açık: Debezium saklama penceresinden uzun süre durursa henüz okumadığı
+satırlar silinir. Pencere bu yüzden geniş tutuldu ve Debezium'un durup durmadığı
+replication slot gecikmesinden izlenir.
+
+Silme parti parti yapılır. Sınırsız tek bir `DELETE`, tablo büyümüşse milyonlarca
+satırı tek transaction'da siler ve sipariş yazan istekler o süre boyunca bekler.
+
 ## Katmanlar
 
 ```
@@ -167,7 +184,7 @@ Servis `http://localhost:8082`, OpenAPI arayüzü `/swagger-ui.html`.
 mvn -pl order-service test
 ```
 
-97 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
+104 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
 sipariş toplamı), use-case testleri (mock port'larla), yayıncı testleri (anahtarlama,
 başarısız gönderimde işaretlememe, deneme sayacı, turun durması), Avro serileştirici
 testleri (kablo biçimi, şemanın hangi ad altında kaydedildiği, ölçeği bozuk tutarın
@@ -185,6 +202,10 @@ Entegrasyon testleri Testcontainers kullanır; Docker çalışıyor olmalıdır.
 
 Şema Flyway ile yönetilir (`db/migration/`); Hibernate `ddl-auto: validate` ile
 yalnızca doğrular, tabloya dokunmaz.
+
+`V4`, temizliğin kullandığı `occurred_at` indeksini ekler. Mevcut kısmi indeks
+yalnızca `published_at IS NULL` satırları kapsadığı için temizlik sorgusu onu
+kullanamaz ve tabloyu baştan sona tarardı.
 
 `V3`, payload sütununu `TEXT`'ten `BYTEA`'ya çevirir. Migration, tabloda yayınlanmamış
 kayıt varsa **bilerek hata verir**: eski kayıtlar JSON'dur, baytlara çevrilseler bile
