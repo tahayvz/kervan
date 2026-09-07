@@ -87,3 +87,10 @@ Karar uygulandı. Eklenen ayrıntılar:
 - **Doğrulama:** `OutboxCdcIntegrationTest`, depodaki gerçek konektör ayar dosyasını
   yükler, Postgres + Kafka + Kafka Connect container'larını ayağa kaldırır ve yalnızca
   veritabanına satır yazarak olayın konuya düşmesini bekler. Uygulama hiç çalışmaz.
+  MongoDB tarafının eşdeğeri `CatalogCdcIntegrationTest`'tir.
+
+- **Mongo tarafında outbox YOK.** Debezium orada `products` koleksiyonunu doğrudan
+  okur. Bu ADR'nin çözdüğü problem (dual-write) katalogda yoktur: katalog servisi
+  bir olay yayınlamıyor, yalnızca veri yazıyor. Taşınan şey de bir domain olayı değil,
+  belgenin kendisi — amacı katalog verisini başka bir yere yansıtmak. İkisini aynı
+  desen saymak, iç veri modelini dış sözleşme hâline getirmek olurdu.

@@ -111,8 +111,17 @@ taşır. Böylece uygulama kodu Kafka'ya hiç dokunmaz; kayıp/çift yazma imkâ
 > **Çok-kaynaklı CDC:** Debezium yalnızca Postgres'e özgü değildir. Postgres için
 > **WAL**, MongoDB için **change streams** (oplog) okur. Polyglot persistence (ADR-0006)
 > nedeniyle projede iki kaynak da vardır: işlemsel servisler (Order/Payment/Inventory)
-> Postgres WAL'ından, Catalog ise MongoDB change streams'ten Kafka'ya akar. Aynı desen,
+> Postgres WAL'ından, Catalog ise MongoDB change streams'ten Kafka'ya akar. Aynı araç,
 > iki farklı depo. *(MongoDB change streams için Mongo replica set modunda çalışmalı.)*
+>
+> **Ama aynı desen değil.** Postgres tarafında Debezium bir **outbox tablosunu** okur:
+> orada duran şey, uygulamanın bilerek yazdığı ve sözleşmesi `event-contracts`'te
+> yazılı bir domain olayıdır. Mongo tarafında outbox yoktur; Debezium doğrudan
+> `products` koleksiyonunu okur ve taşıdığı şey belgenin kendisidir.
+>
+> Fark bilinçlidir. Outbox bir **iş olayı** duyurur; katalog akışı ise veriyi başka
+> bir yere **yansıtır** (Faz 5'teki arama indeksi ilk müşterisi). İkisini aynı saymak,
+> iç veri modelini dış sözleşme hâline getirmek olurdu.
 
 ### 4.3 Saga (çoklu servis tutarlılığı)
 Sipariş akışı birden çok servisi kapsar; 2PC (two-phase commit) ölçeklenmez.

@@ -46,7 +46,7 @@ marked done unless its code and tests are in this repository.
 | 2b | **API Gateway (Spring Cloud Gateway)** — one front door, central authentication | ✅ Done |
 | 3b | **Avro + Confluent Schema Registry** — versioned event contracts, compatibility enforced in tests | ✅ Done |
 | 3c | **Debezium CDC — PostgreSQL WAL + outbox routing** | ✅ Done |
-| 3d | Debezium CDC — MongoDB change streams (Catalog) | Planned |
+| 3d | **Debezium CDC — MongoDB change streams (Catalog)** | ✅ Done |
 | 4 | Order / Payment / Inventory + Saga orchestration | Planned |
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
@@ -217,6 +217,14 @@ integration test loads **that same file**, starts PostgreSQL, Kafka and Kafka Co
 writes one row to the outbox table, and waits for the event on the topic. The
 application is not running during that test; that is the point.
 
+The same tool reads the catalogue out of **MongoDB change streams**, so both stores in
+this polyglot setup feed the same log. It is deliberately not the same pattern, though.
+The order side carries a domain event the application chose to publish, with its
+contract written down in `event-contracts`. The catalogue side has no outbox: Debezium
+reads the `products` collection directly and what travels is the document itself — a
+projection of the data, whose first consumer will be the search index in phase 5.
+Treating the two as one thing would turn an internal data model into a public contract.
+
 - **PostgreSQL + Flyway** — schema is versioned; Hibernate runs with `ddl-auto: validate`
   and never touches the tables
 - **Partial index** on unpublished rows only, so the publisher's query stays cheap as
@@ -273,7 +281,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Async messaging | Apache Kafka | ✅ |
 | Transactional Outbox | own implementation | ✅ |
 | Schema management | Confluent Schema Registry + Avro | ✅ |
-| Change data capture | Debezium (PostgreSQL WAL) | ✅ |
+| Change data capture | Debezium (PostgreSQL WAL + MongoDB change streams) | ✅ |
 | Saga orchestration | | planned |
 | Search | Elasticsearch | planned |
 | Cache / locking / rate limiting | Redis | planned |

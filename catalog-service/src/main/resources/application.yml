@@ -8,6 +8,15 @@ spring:
     mongodb:
       # 12-Factor: config ortam değişkeninden gelir; lokal varsayılan compose ile uyumlu.
       # authSource=admin — root kullanıcı admin veritabanında tanımlı (compose).
+      #
+      #
+      # Mongo artık replica set modunda (Debezium change streams için gerekli) ama
+      # buradaki adres değişmedi: tek adres verildiğinde ve URI'de replicaSet
+      # yazmadığında sürücü zaten doğrudan bağlanır, küme üyelerini aramaz.
+      #
+      # Buraya `replicaSet=rs0` EKLEME. O zaman sürücü üyeleri keşfeder ve üyenin
+      # ilan ettiği adrese ("mongodb:27017") bağlanmaya çalışır; o ad Docker ağının
+      # içinde çözülür, ana makinede çözülmez.
       uri: ${MONGODB_URI:mongodb://kervan:kervan@localhost:27017/catalog?authSource=admin}
       # İndeksler Mongock migration'ıyla yönetilir; Spring'in otomatik indekslemesi kapalı.
       auto-index-creation: false

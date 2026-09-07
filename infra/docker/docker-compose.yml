@@ -57,15 +57,47 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    # REPLICA SET MODU — Debezium'un change streams okuyabilmesi icin sart.
+    # Change streams, Mongo'nun oplog'una dayanir; oplog yalnizca replica set
+    # modunda tutulur. Tek dugumlu bir set yeterli.
+    #
+    # Kimlik dogrulama acikken replica set uyeleri BIRBIRIYLE de dogrulasir ve
+    # bunun icin ortak bir anahtar dosyasi ister. Tek dugum oldugu icin anahtarin
+    # kimseyle paylasilmasi gerekmiyor; her acilista uretiliyor. Boylece depoda
+    # gizli bir dosya tutmuyoruz.
+    #
+    # chmod 400 + chown zorunlu: mongod, herkesin okuyabildigi bir anahtar
+    # dosyasiyla baslamayi reddeder.
+    command: >
+      bash -c "head -c 756 /dev/urandom | base64 > /tmp/rs-keyfile
+      && chmod 400 /tmp/rs-keyfile
+      && chown mongodb:mongodb /tmp/rs-keyfile
+      && exec docker-entrypoint.sh mongod --replSet rs0 --keyFile /tmp/rs-keyfile --bind_ip_all"
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
-    # Not: Faz 3'te Debezium MongoDB connector'ı change streams okuyabilmek için
-    # Mongo'nun replica set modunda olması gerekecek (tek düğümlü rs yeterli).
-    # O fazda: command: ["--replSet","rs0"] + bir kez rs.initiate() eklenecek.
+
+  # Replica set'i bir kez baslatir ve cikar. rs.initiate() yalnizca ilk seferde
+  # gereklidir; sonraki acilislarda durum /data/db icinde durur, bu yuzden komut
+  # "zaten baslatilmis" hatasini yutar.
+  #
+  # Uye adresi "mongodb:27017" olarak veriliyor: Debezium ayni Docker aginda
+  # oldugu icin bu adi cozebilir. Ana makineden baglanan gelistiricinin adresine
+  # replicaSet=rs0 EKLEMEMESI gerekir; sebebi catalog-service application.yml'de.
+  mongo-init:
+    image: mongo:7
+    container_name: kervan-mongo-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      bash -c "mongosh --host mongodb -u kervan -p kervan --authenticationDatabase admin --quiet --eval
+      'try { rs.status() } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongodb:27017\"}]}) }'"
+
 
   # Olay omurgası — ADR-0003. order-service, outbox kayıtlarını buraya taşır.
   # KRaft modunda çalışır: ayrı Zookeeper konteyneri gerekmez.

@@ -51,6 +51,13 @@ change streams (oplog). Böylece Outbox → Kafka akışı her iki dünyada da �
   migration aracı (Postgres için **Flyway**, MongoDB için **Mongock**), iki Debezium
   connector tipi. Bu karmaşıklık bilinçli kabul edilir; kurumsal gerçeklik zaten budur.
 - **Not (change streams):** Debezium MongoDB connector'ı için Mongo **replica set**
-  modunda çalışmalı (tek düğümlü rs yeterli). Lokal compose Faz 3'te buna göre ayarlanır.
+  modunda çalışmalı (tek düğümlü rs yeterli). Faz 3'te yapıldı: compose'daki Mongo tek
+  düğümlü bir replica set olarak çalışıyor — küme kurmak için değil, oplog için.
+  Kimlik doğrulama açıkken üyeler birbiriyle de doğrulaştığı için ortak bir anahtar
+  dosyası gerekti; tek düğüm olduğundan anahtar her açılışta konteyner içinde
+  üretiliyor, depoda gizli bir dosya durmuyor. Servisin bağlantı adresi değişmedi:
+  sürücü tek adres verildiğinde ve URI'de `replicaSet` yazmadığında doğrudan bağlanır.
+  Adrese `replicaSet=rs0` eklenirse durum değişir — üye kendini Docker ağı içindeki
+  adıyla tanıtır ve o ad dışarıda çözülmez.
 - **Süreklilik:** Yeni bir servis eklenirken "hangi depo?" sorusu bu ADR ışığında
   cevaplanır — varsayılan Postgres, belge-esnek/ölçek gerekçesi varsa MongoDB.

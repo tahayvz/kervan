@@ -38,19 +38,42 @@ Bağımlılıklar **içe** doğru akar; `domain` hiçbir framework'e bağımlı 
 
 ## Çalıştırma (lokal)
 ```bash
-# 1) MongoDB'yi ayağa kaldır (repo kökünden)
-docker compose -f infra/docker/docker-compose.yml up -d mongodb
+# 1) MongoDB'yi ayağa kaldır (repo kökünden). mongo-init replica set'i bir kez başlatır.
+docker compose -f infra/docker/docker-compose.yml up -d mongodb mongo-init
 
 # 2) Servisi çalıştır
 mvn -pl catalog-service spring-boot:run
 # → http://localhost:8081/swagger-ui.html
 ```
 
+## Değişiklik akışı (CDC)
+
+`products` koleksiyonundaki her değişiklik Debezium tarafından okunup
+`kervan.catalog.products` konusuna yazılır. Bu servis Kafka'ya **hiç dokunmaz**;
+akış onun haberi olmadan çalışır.
+
+Bu, sipariş tarafındaki outbox deseninden farklıdır ve fark bilinçlidir. Outbox bir
+**iş olayı** duyurur, sözleşmesi `event-contracts`'te yazılıdır. Buradaki akış ise
+verinin **yansımasıdır**: taşınan şey belgenin kendisidir. İlk müşterisi Faz 5'teki
+arama indeksi olacak.
+
+Ayrıntı ve kurulum: [`infra/docker/debezium/README.md`](../infra/docker/debezium/README.md)
+
+**Mongo neden replica set modunda?** Change streams, Mongo'nun oplog'una dayanır ve
+oplog tek düğümlü kurulumda tutulmaz. Küme kurmak için değil, yalnızca bu yüzden.
+Bu değişiklik servisin bağlantı adresini etkilemedi; sebebi `application.yml` içinde
+yazılı.
+
 ## Test
 ```bash
 # Unit + Testcontainers entegrasyon testleri (Docker gerekir)
 mvn -pl catalog-service test
 ```
+
+Testlerden biri (`CatalogCdcIntegrationTest`) MongoDB, Kafka ve Kafka Connect
+container'larını ayağa kaldırır, depodaki gerçek konektör ayar dosyasını yükler ve
+yalnızca koleksiyona belge yazarak olayın konuya düşmesini bekler. Uygulama o test
+sırasında çalışmaz.
 
 ## İmaj build (opsiyonel — repo kökünden)
 ```bash

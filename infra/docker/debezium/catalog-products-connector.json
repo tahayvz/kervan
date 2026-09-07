@@ -1,0 +1,21 @@
+{
+  "name": "kervan-catalog-products",
+  "config": {
+    "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
+
+    "mongodb.connection.string": "mongodb://kervan:kervan@mongodb:27017/?replicaSet=rs0&authSource=admin",
+
+    "topic.prefix": "kervan",
+
+    "database.include.list": "catalog",
+    "collection.include.list": "catalog.products",
+
+    "capture.mode": "change_streams_update_full",
+    "snapshot.mode": "no_data",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}

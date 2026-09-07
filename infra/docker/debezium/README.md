@@ -41,7 +41,7 @@ Debezium'dan, biri `OutboxPublisher`'dan. Varsayılan açıktır.
 KERVAN_OUTBOX_PUBLISHER_ENABLED=false mvn -pl order-service spring-boot:run
 ```
 
-Konektörü kaydet:
+Konektörleri kaydet:
 
 ```bash
 curl -X POST -H 'Content-Type: application/json' \
@@ -49,11 +49,64 @@ curl -X POST -H 'Content-Type: application/json' \
      http://localhost:8083/connectors
 ```
 
-Durumunu gör:
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+     --data @infra/docker/debezium/catalog-products-connector.json \
+     http://localhost:8083/connectors
+```
+
+Durumlarını gör:
 
 ```bash
 curl -s http://localhost:8083/connectors/kervan-order-outbox/status | jq
 ```
+
+```bash
+curl -s http://localhost:8083/connectors/kervan-catalog-products/status | jq
+```
+
+## İki konektör, iki farklı iş
+
+| | `kervan-order-outbox` (PostgreSQL) | `kervan-catalog-products` (MongoDB) |
+|---|---|---|
+| Kaynak | `outbox_messages` tablosu | `products` koleksiyonu |
+| Ne okur | WAL (write-ahead log) | change streams (oplog) |
+| Taşıdığı şey | Uygulamanın yazdığı **domain olayı** | Belgenin **kendisi** |
+| Sözleşme | `event-contracts` (Avro, sürümlü) | Debezium change event (JSON) |
+| Konu | `kervan.orders.events` | `kervan.catalog.products` |
+
+**Bu fark bilinçli.** Outbox, "şu iş oldu" diyen bir olay yayınlamak içindir; olayın
+biçimi servislerin üzerinde anlaştığı bir sözleşmedir ve tek yerde yazılıdır.
+
+Katalog akışı ise verinin kendisinin kopyasıdır. Amacı bir iş olayını duyurmak değil,
+katalog verisini başka bir yere yansıtmaktır — Faz 5'teki arama indeksi bunun ilk
+müşterisi olacak.
+
+İkisini aynı şey saymak, iç veri modelini dış sözleşme hâline getirmek olurdu:
+`products` koleksiyonundaki her alan adı değişikliği, onu dinleyen herkesi kırardı.
+Katalog akışını tüketen taraf bunu bilerek tüketir; sipariş olaylarını tüketen taraf
+ise sözleşmeye güvenir.
+
+## MongoDB tarafı
+
+Change streams **replica set modu ister**: akış Mongo'nun oplog'una dayanır ve oplog
+tek düğümlü (standalone) kurulumda tutulmaz. Compose'daki Mongo tek düğümlü bir
+replica set olarak çalışır — küme kurmak için değil, yalnızca oplog için.
+
+Kimlik doğrulama açıkken replica set üyeleri birbiriyle de doğrulaşır ve ortak bir
+anahtar dosyası ister. Tek düğüm olduğu için anahtarın kimseyle paylaşılması
+gerekmiyor; her açılışta konteyner içinde üretiliyor. Depoda gizli bir dosya
+tutmuyoruz.
+
+`mongo-init` konteyneri `rs.initiate()` çağrısını bir kez yapar ve çıkar. Üye adresi
+`mongodb:27017` olarak veriliyor; Debezium aynı Docker ağında olduğu için bu adı
+çözer.
+
+**Ana makineden bağlanan adrese `replicaSet=rs0` eklemeyin.** Sürücü tek adres
+verildiğinde ve URI'de `replicaSet` yazmadığında doğrudan bağlanır, üye aramaz —
+`catalog-service`'in lokal adresi bu yüzden değişmedi. `replicaSet=rs0` eklenirse
+sürücü keşfe geçer ve üyenin ilan ettiği `mongodb:27017` adresine bağlanmaya çalışır;
+o ad Docker ağının dışında çözülmez.
 
 ## Ayarların anlamı
 

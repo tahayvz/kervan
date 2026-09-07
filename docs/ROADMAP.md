@@ -91,8 +91,10 @@ anda yazma) ele alınmazsa veri tutarsız kalır.
 - **Transactional Outbox** deseni: event, iş verisiyle **aynı transaction**'da
   outbox tablosuna yazılır — ✅ yapıldı
 - **Debezium** (CDC): değişiklikleri okuyup Kafka'ya taşır — "dual write" problemi
-  kökten çözülür. **İki kaynak:** Postgres (WAL, outbox tablosu) — ✅ yapıldı;
-  MongoDB (change streams, Catalog) — sırada. Aynı desen, iki farklı depo (ADR-0006)
+  kökten çözülür. **İki kaynak:** Postgres (WAL, outbox tablosu) ve MongoDB
+  (change streams, Catalog) — ✅ ikisi de yapıldı. Aynı araç, iki farklı depo
+  (ADR-0006). Not: Postgres tarafı outbox okur (domain olayı), Mongo tarafı
+  koleksiyonu okur (verinin yansıması); ikisi kasten farklı — bkz. ARCHITECTURE §4.2
 - Ortak `event-contracts` modülü (Avro şemaları tek yerde) — ✅ yapıldı
 
 **Kazanım:** Dual-write problemi Transactional Outbox + Debezium CDC ile çözülür;

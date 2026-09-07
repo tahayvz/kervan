@@ -90,6 +90,27 @@
             <artifactId>mongodb</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!--
+          CDC testi icin: Kafka Connect'in tasidigi olayi okumak gerekiyor.
+          catalog-service'in kendisi Kafka'ya hic dokunmaz; bu bagimliliklar
+          yalnizca testte kullanilir.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
