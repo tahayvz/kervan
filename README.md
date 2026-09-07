@@ -49,7 +49,8 @@ marked done unless its code and tests are in this repository.
 | 3d | **Debezium CDC — MongoDB change streams (Catalog)** | ✅ Done |
 | 4a | **Saga message contracts + topic topology** | ✅ Done |
 | 4b | **Inventory Service — stock reservation, idempotent consumer, compensation** | ✅ Done |
-| 4c | Payment Service + saga orchestrator | Planned |
+| 4c | **Payment Service — capture, refund, simulated provider behind a port** | ✅ Done |
+| 4d | Saga orchestrator + end-to-end flow | Planned |
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
@@ -272,6 +273,31 @@ holding overlapping products in different orders would each wait on the other; a
 order makes that deadlock structurally impossible rather than something to retry around.
 
 Service documentation: [inventory-service/README.md](inventory-service/README.md)
+
+---
+
+### Payment Service
+
+The saga's second step: it captures the order's amount and refunds it when a later step
+fails. Same shape as the inventory service — commands in, answers out through the
+outbox — with the same idempotency argument, which matters more here: reserving too
+much stock is recoverable, charging a customer twice is not.
+
+**There is no real payment provider, and the code does not pretend otherwise.** The
+`PaymentGateway` port has a simulated implementation whose name says so. Its behaviour
+is rule-based rather than random — amounts above a configured limit are declined — so
+the saga's failure path can be exercised deterministically. A random simulator would
+make tests fail occasionally and send the reader looking for the cause in the code,
+when the thing under test is the saga, not the provider's mood. The port earns its keep
+regardless: business rules are testable without the external system, and a real provider
+would change exactly one class.
+
+A declined payment is not an error, so the exception does not escape and the failure
+event commits on its own. A failure *during a refund* is different and deliberately does
+escape: the record must not be marked refunded when no money moved, so the transaction
+rolls back and the command is retried.
+
+Service documentation: [payment-service/README.md](payment-service/README.md)
 
 ---
 

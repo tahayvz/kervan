@@ -34,13 +34,14 @@
       Faz 3: order-service (PostgreSQL + Transactional Outbox → Kafka).
       Faz 3: event-contracts (servisler arası Avro olay şemaları) — ÖNCE derlenmeli,
              çünkü diğer modüller ona bağımlı.
-      Faz 4: inventory-service (Saga'nın stok adımı).
+      Faz 4: inventory-service (Saga'nın stok adımı), payment-service (ödeme adımı).
     -->
     <modules>
         <module>event-contracts</module>
         <module>catalog-service</module>
         <module>order-service</module>
         <module>inventory-service</module>
+        <module>payment-service</module>
         <module>api-gateway</module>
     </modules>
 

@@ -65,6 +65,12 @@ curl -X POST -H 'Content-Type: application/json' \
      http://localhost:8083/connectors
 ```
 
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+     --data @infra/docker/debezium/payment-outbox-connector.json \
+     http://localhost:8083/connectors
+```
+
 Durumlarını gör:
 
 ```bash
@@ -75,18 +81,18 @@ curl -s http://localhost:8083/connectors/kervan-order-outbox/status | jq
 curl -s http://localhost:8083/connectors/kervan-catalog-products/status | jq
 ```
 
-## Üç konektör, iki farklı iş
+## Dört konektör, iki farklı iş
 
-| | `kervan-order-outbox` | `kervan-inventory-outbox` | `kervan-catalog-products` |
-|---|---|---|---|
-| Kaynak | `orders` DB, outbox tablosu | `inventory` DB, outbox tablosu | `catalog` DB, `products` koleksiyonu |
-| Ne okur | WAL | WAL | change streams (oplog) |
-| Taşıdığı şey | **domain olayı** | **domain olayı** | Belgenin **kendisi** |
-| Sözleşme | `event-contracts` (Avro) | `event-contracts` (Avro) | Debezium change event (JSON) |
-| Konu | `kervan.orders.events` | `kervan.inventory.events` | `kervan.catalog.products` |
+| | outbox konektörleri (3) | `kervan-catalog-products` |
+|---|---|---|
+| Kaynak | `orders`, `inventory`, `payment` DB'lerindeki outbox tabloları | `catalog` DB, `products` koleksiyonu |
+| Ne okur | WAL | change streams (oplog) |
+| Taşıdığı şey | **domain olayı** | Belgenin **kendisi** |
+| Sözleşme | `event-contracts` (Avro) | Debezium change event (JSON) |
+| Konu | `kervan.<servis>.events` | `kervan.catalog.products` |
 
-İlk ikisi aynı desendir, yalnızca kaynak veritabanı farklı. Üçüncüsü farklı bir iş
-yapar:
+Üç outbox konektörü aynı desendir; yalnızca veritabanı, slot adı ve hedef konu farklı.
+Dördüncüsü farklı bir iş yapar:
 
 **Bu fark bilinçli.** Outbox, "şu iş oldu" diyen bir olay yayınlamak içindir; olayın
 biçimi servislerin üzerinde anlaştığı bir sözleşmedir ve tek yerde yazılıdır.
@@ -99,6 +105,13 @@ müşterisi olacak.
 `products` koleksiyonundaki her alan adı değişikliği, onu dinleyen herkesi kırardı.
 Katalog akışını tüketen taraf bunu bilerek tüketir; sipariş olaylarını tüketen taraf
 ise sözleşmeye güvenir.
+
+### Her slot adı ayrı olmalı
+
+Üç outbox konektörü ayrı veritabanlarını okur ama aynı PostgreSQL sunucusunda. Her
+birinin **kendi replication slot'u ve kendi publication'ı** var
+(`kervan_<servis>_outbox`). Aynı adı paylaşsalardı biri diğerinin okuduğu konumu
+ilerletir ve arada kalan değişiklikler kaybolurdu.
 
 ## MongoDB tarafı
 

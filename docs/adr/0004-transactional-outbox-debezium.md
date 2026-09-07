@@ -94,6 +94,14 @@ Karar uygulandı. Eklenen ayrıntılar:
   veritabanına satır yazarak olayın konuya düşmesini bekler. Uygulama hiç çalışmaz.
   MongoDB tarafının eşdeğeri `CatalogCdcIntegrationTest`'tir.
 
+- **Outbox düzeneği üç serviste tekrar ediyor** (order, inventory, payment) ve bu
+  bilinçli bir tercihtir. Ortak bir kütüphaneye taşımak üç servisi tek bir sürüme
+  bağlardı; ayrıca tablolar birebir aynı değil — order-service'te uygulama içi
+  yayıncı için `published_at`/`attempts` sütunları var, diğerlerinde yok. Tekrarlanan
+  şey yaklaşık 60 satırlık altyapı kodu, iş kuralı değil. **Bedeli açık:** bir hata
+  düzeltmesi üç yere uygulanmalı. Dördüncü bir servis geldiğinde ya da tablolar
+  birbirine yaklaştığında bu karar yeniden değerlendirilmelidir.
+
 - **Mongo tarafında outbox YOK.** Debezium orada `products` koleksiyonunu doğrudan
   okur. Bu ADR'nin çözdüğü problem (dual-write) katalogda yoktur: katalog servisi
   bir olay yayınlamıyor, yalnızca veri yazıyor. Taşınan şey de bir domain olayı değil,

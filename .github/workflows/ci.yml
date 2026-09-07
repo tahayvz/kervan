@@ -47,7 +47,7 @@ jobs:
     needs: [ build ]
     strategy:
       matrix:
-        service: [ catalog-service, order-service, inventory-service, api-gateway ]
+        service: [ catalog-service, order-service, inventory-service, payment-service, api-gateway ]
     steps:
       - uses: actions/checkout@v7
 

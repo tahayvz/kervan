@@ -115,7 +115,8 @@ dağıtık transaction (2PC) ölçeklenmez. Çözüm: **Saga** (telafi edici iş
   PaymentRefunded, OrderCancelled)
   - Mesaj sözleşmeleri ve konu topolojisi — ✅ yapıldı (ADR-0009)
   - `inventory-service` (stok ayırma + telafi) — ✅ yapıldı
-  - `payment-service` ve orchestrator — sırada
+  - `payment-service` (tahsilat + iade telafisi) — ✅ yapıldı
+  - Saga orchestrator ve uçtan uca akış — sırada
 - İdempotent tüketici (aynı event iki kez işlenmez)
 - Durum makinesi (state machine) ile sipariş yaşam döngüsü
 
