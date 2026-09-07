@@ -29,6 +29,31 @@ Three rules the project holds itself to:
 
 Documentation under `docs/` is written in Turkish.
 
+## What this project is not
+
+**It does not sell anything.** There is no real payment provider, no real customers, no
+real catalogue. This is a working system built to exercise a set of technologies and the
+problems they exist to solve — not a product looking for users.
+
+That distinction is stated here rather than left to be discovered, because it changes how
+some of the code should be read:
+
+- The payment gateway is a **simulator** behind a port, and its class name says so. Its
+  behaviour is rule-based rather than random so the saga's failure path can be exercised
+  on purpose.
+- Product and customer data is whatever gets seeded; nothing here is anyone's real order.
+- Decisions are made for the case a real system would face, and the reasoning is written
+  down even where the demo itself would survive a lazier choice — that reasoning is the
+  point of the exercise.
+
+What is real is everything between those edges: the messaging, the transactions, the
+compensation, the schemas, the failure handling. Those run against real PostgreSQL, real
+MongoDB, real Kafka and real Debezium in the tests, not against mocks.
+
+The last phase closes the loop: seed synthetic customers and orders, put load through the
+system, and watch it from the outside — traces, metrics, and dashboards. A technology you
+have only wired up is not one you have understood; the point is to see it under pressure.
+
 ---
 
 ## Status — honest version
@@ -56,6 +81,7 @@ marked done unless its code and tests are in this repository.
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
 | 9 | Kubernetes + Helm | Planned |
+| 10 | Synthetic load — seeded data, sustained traffic, watching it from outside | Planned |
 
 Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
 

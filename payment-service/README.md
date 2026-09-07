@@ -22,6 +22,11 @@ kervan.payments.commands
 
 ## Gerçek bir ödeme sağlayıcısı yok — ve öyleymiş gibi durmuyor
 
+Bu proje bir ürün değil, teknolojileri deneyimlemek için kurulmuş çalışan bir sistem
+(bkz. kök [README](../README.md) → "What this project is not"). Ödeme burada bir
+**saga adımıdır**; amaç para tahsil etmek değil, başarısız olabilen bir adımın
+telafisini doğru kurmaktır.
+
 Projede bağlanılacak bir sağlayıcı bulunmuyor. `PaymentGateway` portunun uygulaması
 (`SimulatedPaymentGateway`) bir **taklit**tir ve adı bunu söyler.
 

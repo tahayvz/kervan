@@ -207,6 +207,36 @@ probe, HPA ve resource limit'leriyle K8s'e deploy edilir.
 
 ---
 
+## Faz 10 — Sentetik yük ve gözlem (projenin kapanışı)
+
+**Neden:** Bu proje bir ürün değil; teknolojileri ve çözdükleri problemleri deneyimlemek
+için var. Bir teknolojiyi "bağladım" demek ile "anladım" demek arasındaki fark, onu
+**yük altında görmüş olmaktır**. Boş bir sistemde her şey çalışır.
+
+Ayrıca buraya kadar kurulan her şeyin — outbox, CDC, saga, telafi — gerçek değeri ancak
+sıkıştırıldığında görünür: kuyruk birikince, tüketici geride kalınca, bir servis
+yavaşlayınca.
+
+**Ne inşa edilecek:**
+- **Sentetik veri**: sahte müşteriler, ürünler ve stok. Tek komutla yüklenebilen,
+  tekrar üretilebilir bir veri seti (rastgele değil, tohumlanmış — aynı veri her
+  seferinde aynı olsun ki karşılaştırma anlamlı olsun).
+- **Yük üretimi**: k6 ya da Gatling ile sipariş akışına sürekli yük. Hem mutlu yol hem
+  başarısızlık yolu (stok yetmeyen, ödeme reddedilen siparişler) belli oranlarda.
+- **İzleme**: Faz 6'da kurulan panolarla sistemi yük altında seyretmek —
+  - outbox tablosunun boyu ve temizliğin yetişip yetişmediği
+  - Debezium replication slot gecikmesi
+  - saga durum dağılımı ve sıkışıp kalmış saga sayısı
+  - ölü mektup konularının doluluğu
+  - uçtan uca gecikme (sipariş → onay)
+- **Deney defteri**: "şunu kırdık, şu oldu" notları. Bir servisi durdurmak, Kafka'yı
+  kesmek, veritabanını yavaşlatmak.
+
+**Kazanım:** Kurulan her düzeneğin gerçekten çalıştığı — ya da hangi noktada
+yetmediği — ölçülmüş olur. Bu fazın çıktısı kod değil, **sayılar ve öğrenilenlerdir.**
+
+---
+
 ## Faz sonrası (opsiyonel ileri seviye)
 
 - **Contract testing** (Spring Cloud Contract) — servisler arası sözleşme garantisi
