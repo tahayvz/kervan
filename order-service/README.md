@@ -139,12 +139,72 @@ hızı parti boyutu ÷ tur aralığında sabitlenirdi ve sipariş hızı bunu ge
 büyümeye devam ederdi. Hiçbir şey de uyarmazdı; log "sildim" derdi. Turun bir üst sınırı
 var; sınıra takılmak "temizlik yetişemiyor" demektir ve uyarı olarak loglanır.
 
+## Saga: siparişin üç servise yayılan akışı
+
+```
+sipariş alındı ──▶ ReserveStock
+                     │
+       StockReserved ┤                    StockReservationFailed
+                     ▼                              │
+               ProcessPayment                       ▼
+                     │                        sipariş İPTAL
+   PaymentProcessed  ┤  PaymentFailed
+           ▼         │        ▼
+     sipariş ONAY    │   ReleaseStock ──▶ StockReleased ──▶ sipariş İPTAL
+```
+
+Akışı bu servis yürütür (orchestration). Alternatifi choreography'dir: her servis bir
+sonrakini tetikler. Orada "sipariş neden iptal oldu" sorusunun cevabı beş servise
+dağılır; telafi eden bir akışta bu, hata ayıklamayı imkânsıza yakın kılar (ADR-0005).
+
+**Saga siparişle aynı transaction'da başlar.** İlk komut, siparişin kendisi ve
+`OrderPlaced` olayıyla birlikte outbox'a yazılır. Ayrı bir adımda gönderilseydi araya
+giren bir çökme siparişi oluşturur ama saga'yı hiç başlatmazdı: müşteri sipariş
+verdiğini görür, arkada hiçbir şey olmaz.
+
+**Ödeme başarısızsa sipariş hemen iptal edilmez.** Önce stok geri bırakılır, iptal
+telafi tamamlanınca gelir. Aksi hâlde müşteriye "iptal edildi" derken stok hâlâ
+tutuluyor olurdu.
+
+**Tekrar gelen olaylar.** Teslimat en az bir kezdir. Her adım saga'yı kilitleyerek
+okur ve geçişin izinli olup olmadığına `SagaState` karar verir. İzinsiz bir geçiş,
+olayın zaten işlendiği anlamına gelir — hata değil, yok sayılır. Kilit olmasaydı aynı
+siparişin iki olayı yan yana işlenip aynı komut iki kez gönderilebilirdi.
+
+**Durum neden tabloda?** Saga uzun ömürlüdür; adımlar arasında dakikalar geçebilir ve
+servis bu sırada yeniden başlayabilir. Bellekte tutulsaydı her yeniden başlatma devam
+eden bütün siparişleri unuturdu.
+
+Sıkışıp kalmış saga'ları bulmak için:
+
+```sql
+SELECT * FROM order_sagas
+WHERE state NOT IN ('COMPLETED', 'CANCELLED')
+  AND updated_at < now() - interval '15 minutes';
+```
+
+## Mesajlar nereye gidiyor?
+
+Bu servis hem kendi **olaylarını** hem saga'nın **komutlarını** outbox'a yazar. Hepsi
+tek konuya gitseydi komutlar yanlış yere düşerdi; bu yüzden hedef konu satırın
+kendisinde (`destination` sütunu) durur ve Debezium yönlendirmeyi ona göre yapar.
+
+| Mesaj | Hedef |
+|---|---|
+| `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `kervan.orders.events` |
+| `ReserveStock`, `ReleaseStock` | `kervan.inventory.commands` |
+| `ProcessPayment`, `RefundPayment` | `kervan.payments.commands` |
+
+Hedefi `aggregate_type` sütununa yüklemek de mümkündü (Debezium'un belgelenmiş yolu
+budur) ama o sütun "hangi toplam" sorusunun cevabı; üstüne ikinci bir anlam yüklemek
+onu bulanıklaştırırdı.
+
 ## Katmanlar
 
 ```
 domain/          Order, OrderLine, Money, OrderStatus, OutboxMessage + portlar
 application/     OrderService (use-case'ler), komutlar
-infrastructure/  JPA adaptörleri, outbox yayıncısı, Avro serileştirici, Flyway şeması
+infrastructure/  JPA adaptörleri, outbox yayıncısı, Avro yayıncı, saga durumu, Flyway şeması
 web/             REST controller, DTO'lar, RFC 7807 hata yönetimi
 ```
 

@@ -29,8 +29,8 @@
     "transforms.outbox.table.field.event.type": "event_type",
     "transforms.outbox.table.field.event.payload": "payload",
     "transforms.outbox.table.expand.json.payload": "false",
-    "transforms.outbox.route.by.field": "aggregate_type",
-    "transforms.outbox.route.topic.replacement": "kervan.orders.events",
+    "transforms.outbox.route.by.field": "destination",
+    "transforms.outbox.route.topic.replacement": "${routedByValue}",
 
     "key.converter": "org.apache.kafka.connect.storage.StringConverter",
     "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter"

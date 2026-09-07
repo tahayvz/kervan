@@ -19,14 +19,22 @@ spring:
 
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      # Gövde outbox tablosunda zaten Avro baytları olarak duruyor; yayıncı onu
-      # olduğu gibi taşır. Serileştirme sipariş yazan transaction'da yapıldı.
-      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
-      # Broker'ların tamamı yazmayı onaylamadan başarı sayma; outbox'ın "gönderildi"
-      # işareti ancak gerçekten dayanıklı yazımdan sonra konmalı.
-      acks: all
+    # Üreticiler burada değil, KafkaProducerConfig'te tanımlı: bu serviste iki farklı
+    # üretici var (outbox baytları / ölü mektup Avro nesnesi) ve Boot yalnızca tek
+    # bir KafkaTemplate otomatik kurar.
+
+    consumer:
+      group-id: order-service
+      # Saga cevapları baştan okunur: servis ilk kez ayağa kalktığında bekleyen
+      # cevaplar kaybolmasın.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      properties:
+        schema.registry.url: ${KERVAN_SCHEMA_REGISTRY_URL:http://localhost:8085}
+        # Şemadan üretilen sınıf gelsin: tipe göre yönlendirme (@KafkaHandler) buna
+        # dayanır.
+        specific.avro.reader: true
 
   security:
     oauth2:
@@ -38,6 +46,14 @@ spring:
           jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
 
 kervan:
+  kafka:
+    retry:
+      # Sürekli hata veren mesaj birkaç kez, aralığı açılarak denenir; sonra
+      # <konu>.DLT'ye taşınır ve kuyruk akmaya devam eder.
+      initial-interval-ms: 500
+      max-interval-ms: 10000
+      max-elapsed-ms: 30000
+
   schema-registry:
     # Schema Registry'nin kendi varsayılanı 8081'dir ama o port lokalde
     # catalog-service'in. Konteyner içeride 8081 dinler, dışarıya 8085'ten açılır.
@@ -46,12 +62,18 @@ kervan:
     # kapatılmalı, şema denetimden geçmiş ayrı bir adımda yayınlanmalıdır.
     auto-register: ${KERVAN_SCHEMA_AUTO_REGISTER:true}
 
+  # Bu servisin yazdığı konular. Olaylar kendi konusuna, komutlar hedef servisin
+  # komut konusuna gider (ADR-0009). Hedef, outbox satırının kendisinde durur;
+  # Debezium yönlendirmeyi ona göre yapar.
+  topics:
+    order-events: kervan.orders.events
+    inventory-commands: kervan.inventory.commands
+    payment-commands: kervan.payments.commands
+    # Saga'yı ilerleten cevaplar buradan gelir.
+    inventory-events: kervan.inventory.events
+    payment-events: kervan.payments.events
+
   outbox:
-    # Debezium devredeyken konu adı konektör ayarında da yazılı
-    # (infra/docker/debezium/order-outbox-connector.json → route.topic.replacement).
-    # İkisi ayrı sistemde olduğu için ortak bir sabitte tutulamıyor; biri
-    # değişirse diğeri de değişmeli.
-    topic: kervan.orders.events
     publisher:
       # Uygulama içi yayıncı. Debezium (CDC) devreye alındığında false yapılır;
       # ikisi birden açık olursa her olay iki kez gider.

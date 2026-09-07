@@ -116,9 +116,9 @@ dağıtık transaction (2PC) ölçeklenmez. Çözüm: **Saga** (telafi edici iş
   - Mesaj sözleşmeleri ve konu topolojisi — ✅ yapıldı (ADR-0009)
   - `inventory-service` (stok ayırma + telafi) — ✅ yapıldı
   - `payment-service` (tahsilat + iade telafisi) — ✅ yapıldı
-  - Saga orchestrator ve uçtan uca akış — sırada
-- İdempotent tüketici (aynı event iki kez işlenmez)
-- Durum makinesi (state machine) ile sipariş yaşam döngüsü
+  - Saga orchestrator (durum makinesi, telafi, idempotent adımlar) — ✅ yapıldı
+- İdempotent tüketici (aynı event iki kez işlenmez) — ✅ yapıldı
+- Durum makinesi (state machine) ile sipariş yaşam döngüsü — ✅ yapıldı
 
 **Kazanım:** Dağıtık transaction yerine orchestration-based Saga kullanılır; her
 adımın telafi (compensation) işlemi tanımlanır, idempotency ile tekrarlar etkisizleşir.

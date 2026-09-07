@@ -29,6 +29,11 @@ import java.util.Objects;
  * sonra işaretlemeden önce çökme olursa aynı olay tekrar gider. Bu yüzden tüketiciler
  * idempotent olmak zorundadır; {@link #id} tekrarları elemek için sabit bir anahtardır.
  *
+ * <h2>Hedef neden kayıtta duruyor?</h2>
+ * Bu servis yalnızca kendi olaylarını değil, saga'nın diğer servislere gönderdiği
+ * <b>komutları</b> da outbox'a yazar. Hepsi tek bir konuya gitseydi komutlar yanlış
+ * yere düşerdi. Hedef satırın kendisinde durur; Debezium yönlendirmeyi ona göre yapar.
+ *
  * <h2>Payload neden bayt?</h2>
  * Olay Avro ile serileştirilir; sonuç metin değil ikili veridir. Baytların ilk beş
  * baytı şemanın Schema Registry'deki kimliğini taşır, bu yüzden olayı okuyan taraf
@@ -41,6 +46,7 @@ public record OutboxMessage(
         String aggregateType,
         String aggregateId,
         String eventType,
+        String destination,
         byte[] payload,
         Instant occurredAt,
         Instant publishedAt) {
@@ -49,6 +55,7 @@ public record OutboxMessage(
         Objects.requireNonNull(aggregateType, "aggregateType null olamaz");
         Objects.requireNonNull(aggregateId, "aggregateId null olamaz");
         Objects.requireNonNull(eventType, "eventType null olamaz");
+        Objects.requireNonNull(destination, "destination null olamaz");
         Objects.requireNonNull(payload, "payload null olamaz");
         Objects.requireNonNull(occurredAt, "occurredAt null olamaz");
         // Dizi paylaşılan bir referanstır; kopyalanmazsa çağıran taraf kaydı
@@ -64,8 +71,9 @@ public record OutboxMessage(
 
     /** Henüz yayınlanmamış yeni bir kayıt. */
     public static OutboxMessage pending(String aggregateType, String aggregateId,
-                                        String eventType, byte[] payload, Instant occurredAt) {
-        return new OutboxMessage(null, aggregateType, aggregateId, eventType,
+                                        String eventType, String destination,
+                                        byte[] payload, Instant occurredAt) {
+        return new OutboxMessage(null, aggregateType, aggregateId, eventType, destination,
                 payload, occurredAt, null);
     }
 
@@ -85,6 +93,7 @@ public record OutboxMessage(
                 && Objects.equals(aggregateType, that.aggregateType)
                 && Objects.equals(aggregateId, that.aggregateId)
                 && Objects.equals(eventType, that.eventType)
+                && Objects.equals(destination, that.destination)
                 && Arrays.equals(payload, that.payload)
                 && Objects.equals(occurredAt, that.occurredAt)
                 && Objects.equals(publishedAt, that.publishedAt);
@@ -92,7 +101,7 @@ public record OutboxMessage(
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, aggregateType, aggregateId, eventType,
+        return Objects.hash(id, aggregateType, aggregateId, eventType, destination,
                 Arrays.hashCode(payload), occurredAt, publishedAt);
     }
 
@@ -100,7 +109,8 @@ public record OutboxMessage(
     public String toString() {
         // Payload ikili veridir; log'a basılırsa okunmaz bir yığın üretir.
         // Yerine boyutu yazılır: sorun ararken asıl işe yarayan bilgi odur.
-        return "OutboxMessage[id=%s, aggregateType=%s, aggregateId=%s, eventType=%s, payloadBytes=%d, occurredAt=%s, publishedAt=%s]"
-                .formatted(id, aggregateType, aggregateId, eventType, payload.length, occurredAt, publishedAt);
+        return "OutboxMessage[id=%s, aggregateType=%s, aggregateId=%s, eventType=%s, destination=%s, payloadBytes=%d, occurredAt=%s, publishedAt=%s]"
+                .formatted(id, aggregateType, aggregateId, eventType, destination,
+                        payload.length, occurredAt, publishedAt);
     }
 }

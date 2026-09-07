@@ -284,12 +284,16 @@ class OutboxCdcIntegrationTest {
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
              PreparedStatement statement = connection.prepareStatement("""
                      INSERT INTO outbox_messages
-                         (id, aggregate_type, aggregate_id, event_type, payload, occurred_at)
-                     VALUES (?, 'Order', ?, 'OrderPlaced', ?, now())
+                         (id, aggregate_type, aggregate_id, event_type, destination,
+                          payload, occurred_at)
+                     VALUES (?, 'Order', ?, 'OrderPlaced', ?, ?, now())
                      """)) {
             statement.setObject(1, UUID.randomUUID());
             statement.setString(2, orderId);
-            statement.setBytes(3, payload);
+            // Konektör yönlendirmeyi bu sütuna göre yapar: satırda yazan konu,
+            // mesajın düşeceği konudur.
+            statement.setString(3, TOPIC);
+            statement.setBytes(4, payload);
             statement.executeUpdate();
         }
     }

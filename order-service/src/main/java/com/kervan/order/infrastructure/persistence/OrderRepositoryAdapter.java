@@ -23,11 +23,26 @@ class OrderRepositoryAdapter implements OrderRepository {
         this.repository = repository;
     }
 
+    /**
+     * Kimliği olmayan sipariş yeni kayıttır; olan ise durum değişikliğidir.
+     *
+     * <p>Bu ayrım şart. {@code OrderMapper.toEntity} her seferinde <b>yeni</b> bir
+     * varlık üretir ve o varlık kendini "yeni" ilan eder; var olan bir siparişi
+     * onunla kaydetmek INSERT denemesi olur ve birincil anahtar çakışır. Saga sipariş
+     * durumunu güncellemeye başlayana kadar bu yol hiç kullanılmamıştı.
+     */
     @Override
     public Order save(Order order) {
-        UUID id = order.id() == null ? UUID.randomUUID() : UUID.fromString(order.id());
-        OrderEntity saved = repository.save(OrderMapper.toEntity(order, id));
-        return OrderMapper.toDomain(saved);
+        if (order.id() == null) {
+            OrderEntity saved = repository.save(OrderMapper.toEntity(order, UUID.randomUUID()));
+            return OrderMapper.toDomain(saved);
+        }
+
+        OrderEntity existing = repository.findById(UUID.fromString(order.id()))
+                .orElseThrow(() -> new IllegalStateException(
+                        "Güncellenecek sipariş bulunamadı: " + order.id()));
+        existing.applyStatus(order.status(), order.updatedAt());
+        return OrderMapper.toDomain(existing);
     }
 
     @Override

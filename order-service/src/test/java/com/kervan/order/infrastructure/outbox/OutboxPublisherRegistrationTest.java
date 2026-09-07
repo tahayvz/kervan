@@ -33,7 +33,6 @@ class OutboxPublisherRegistrationTest {
             .withBean(KafkaTemplate.class, () -> mock(KafkaTemplate.class))
             .withBean(Clock.class, Clock::systemUTC)
             .withPropertyValues(
-                    "kervan.outbox.topic=kervan.orders.events",
                     "kervan.outbox.batch-size=100",
                     "kervan.outbox.max-attempts=5",
                     "kervan.outbox.send-timeout=5s")

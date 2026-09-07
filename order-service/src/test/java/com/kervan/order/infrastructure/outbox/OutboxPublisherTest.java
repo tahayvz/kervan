@@ -44,14 +44,13 @@ class OutboxPublisherTest {
                 outboxRepository,
                 kafkaTemplate,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                TOPIC,
                 100,
                 MAX_ATTEMPTS,
                 Duration.ofSeconds(5));
     }
 
     private OutboxMessage message(String id, String aggregateId) {
-        return new OutboxMessage(id, "Order", aggregateId, "OrderPlaced",
+        return new OutboxMessage(id, "Order", aggregateId, "OrderPlaced", TOPIC,
                 payloadOf(aggregateId), NOW, null);
     }
 

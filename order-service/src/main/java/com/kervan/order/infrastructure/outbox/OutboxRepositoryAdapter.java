@@ -31,6 +31,7 @@ class OutboxRepositoryAdapter implements OutboxRepository {
                 message.aggregateType(),
                 message.aggregateId(),
                 message.eventType(),
+                message.destination(),
                 message.payload(),
                 message.occurredAt(),
                 message.publishedAt()));
@@ -107,6 +108,7 @@ class OutboxRepositoryAdapter implements OutboxRepository {
                 entity.getAggregateType(),
                 entity.getAggregateId(),
                 entity.getEventType(),
+                entity.getDestination(),
                 entity.getPayload(),
                 entity.getOccurredAt(),
                 entity.getPublishedAt());

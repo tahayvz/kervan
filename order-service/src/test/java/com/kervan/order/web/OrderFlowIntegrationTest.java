@@ -45,7 +45,7 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private OutboxRepository outboxRepository;
 
-    @Value("${kervan.outbox.topic}")
+    @Value("${kervan.topics.order-events}")
     private String topic;
 
     /** Her test kendi müşterisiyle çalışır; testler birbirinin verisini görmez. */

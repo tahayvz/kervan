@@ -41,6 +41,10 @@ import java.util.concurrent.TimeoutException;
  * açık tutardı; bu, Kafka kesintisini sipariş alma yoluna bulaştırırdı — outbox'ın
  * önlemek için var olduğu şeyin ta kendisi.
  *
+ * <p>Her kayıt <b>kendi hedefine</b> gönderilir: bu servis yalnızca kendi olaylarını
+ * değil, saga'nın diğer servislere gönderdiği komutları da outbox'a yazar. Hepsi tek
+ * konuya gitseydi komutlar yanlış yere düşerdi.
+ *
  * <p>Sıralama: Kafka'ya {@code aggregateId} anahtarıyla yazılır, aynı siparişin
  * olayları aynı partition'a düşer. Bir gönderim başarısız olduğunda tur sonlandırılır
  * ki o siparişin sonraki olayları öne geçmesin.
@@ -68,7 +72,6 @@ class OutboxPublisher {
     private final OutboxRepository outboxRepository;
     private final KafkaTemplate<String, byte[]> kafkaTemplate;
     private final Clock clock;
-    private final String topic;
     private final int batchSize;
     private final int maxAttempts;
     private final Duration sendTimeout;
@@ -76,14 +79,12 @@ class OutboxPublisher {
     OutboxPublisher(OutboxRepository outboxRepository,
                     KafkaTemplate<String, byte[]> kafkaTemplate,
                     Clock clock,
-                    @Value("${kervan.outbox.topic}") String topic,
                     @Value("${kervan.outbox.batch-size}") int batchSize,
                     @Value("${kervan.outbox.max-attempts}") int maxAttempts,
                     @Value("${kervan.outbox.send-timeout}") Duration sendTimeout) {
         this.outboxRepository = outboxRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.clock = clock;
-        this.topic = topic;
         this.batchSize = batchSize;
         this.maxAttempts = maxAttempts;
         this.sendTimeout = sendTimeout;
@@ -104,7 +105,7 @@ class OutboxPublisher {
     /** @return gönderim başarılıysa true; false dönerse bu tur sonlandırılır */
     private boolean publish(OutboxMessage message) {
         try {
-            kafkaTemplate.send(topic, message.aggregateId(), message.payload())
+            kafkaTemplate.send(message.destination(), message.aggregateId(), message.payload())
                     .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
 
             outboxRepository.markPublished(message.id(), clock.instant());

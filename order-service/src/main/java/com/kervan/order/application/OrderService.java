@@ -8,10 +8,11 @@ import com.kervan.order.domain.model.Caller;
 import com.kervan.order.domain.model.Money;
 import com.kervan.order.domain.model.Order;
 import com.kervan.order.domain.model.OrderLine;
+import com.kervan.order.domain.model.OrderSaga;
 import com.kervan.order.domain.model.OutboxMessage;
-import com.kervan.order.domain.port.OrderEventSerializer;
+import com.kervan.order.domain.port.OrderMessagePublisher;
 import com.kervan.order.domain.port.OrderRepository;
-import com.kervan.order.domain.port.OutboxRepository;
+import com.kervan.order.domain.port.SagaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,28 +31,30 @@ import java.util.List;
 @Service
 public class OrderService {
 
-    private static final String AGGREGATE_TYPE = "Order";
-
     private final OrderRepository orderRepository;
-    private final OutboxRepository outboxRepository;
-    private final OrderEventSerializer eventSerializer;
+    private final SagaRepository sagaRepository;
+    private final OrderMessagePublisher messages;
     private final Clock clock;
 
     public OrderService(OrderRepository orderRepository,
-                        OutboxRepository outboxRepository,
-                        OrderEventSerializer eventSerializer,
+                        SagaRepository sagaRepository,
+                        OrderMessagePublisher messages,
                         Clock clock) {
         this.orderRepository = orderRepository;
-        this.outboxRepository = outboxRepository;
-        this.eventSerializer = eventSerializer;
+        this.sagaRepository = sagaRepository;
+        this.messages = messages;
         this.clock = clock;
     }
 
     /**
-     * Siparişi ve ona ait {@code OrderPlaced} olayını tek transaction'da yazar.
+     * Siparişi, olayını ve saga'nın ilk komutunu tek transaction'da yazar.
      * <p>
-     * Olay burada Kafka'ya gönderilmez; yalnızca outbox tablosuna yazılır. Taşıma işi
-     * {@code OutboxPublisher}'a aittir. Gerekçe: {@link OutboxMessage}.
+     * Hiçbiri Kafka'ya doğrudan gönderilmez; outbox tablosuna yazılır ve oradan
+     * taşınır. Gerekçe: {@link OutboxMessage}.
+     * <p>
+     * Serileştirme de bu transaction'ın içinde yapılır: şema Registry tarafından
+     * reddedilirse sipariş de yazılmaz. Kimsenin duymayacağı bir sipariş
+     * oluşturmaktansa isteği reddetmek doğrudur.
      */
     @Transactional
     public Order placeOrder(PlaceOrderCommand command, Caller caller) {
@@ -69,7 +72,14 @@ public class OrderService {
         // Sipariş sahibi token'dan alınır, istek gövdesinden değil. Aksi hâlde bir
         // müşteri başka bir müşterinin adına sipariş oluşturabilirdi.
         Order saved = orderRepository.save(Order.place(caller.userId(), lines, now));
-        outboxRepository.save(toOutboxMessage(saved, now));
+
+        // Olay ve saga'nın ilk komutu siparişle AYNI transaction'da yazılır.
+        // Komut ayrı bir adımda gönderilseydi, araya giren bir çökme siparişi
+        // oluşturur ama saga'yı hiç başlatmazdı: müşteri sipariş verdiğini görür,
+        // arkada hiçbir şey olmaz.
+        messages.orderPlaced(toEvent(saved, now), now);
+        sagaRepository.save(OrderSaga.started(saved.id(), now));
+        messages.reserveStock(saved.id(), saved.lines(), now);
 
         return saved;
     }
@@ -91,8 +101,8 @@ public class OrderService {
         return order;
     }
 
-    private OutboxMessage toOutboxMessage(Order order, Instant now) {
-        OrderPlaced event = new OrderPlaced(
+    private OrderPlaced toEvent(Order order, Instant now) {
+        return new OrderPlaced(
                 order.id(),
                 order.customerId(),
                 order.totalAmount().amount(),
@@ -105,12 +115,5 @@ public class OrderService {
                                 line.unitPrice().amount()))
                         .toList(),
                 order.placedAt());
-
-        // Serileştirme transaction'ın İÇİNDE yapılır. Olay serileştirilemiyorsa
-        // (örneğin şema Registry tarafından reddedildiyse) sipariş de yazılmaz:
-        // kimsenin duymayacağı bir sipariş oluşturmaktansa isteği reddetmek doğrudur.
-        return OutboxMessage.pending(
-                AGGREGATE_TYPE, order.id(), OrderPlaced.EVENT_TYPE,
-                eventSerializer.serialize(event), now);
     }
 }

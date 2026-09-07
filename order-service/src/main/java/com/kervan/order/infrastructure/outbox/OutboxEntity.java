@@ -28,6 +28,10 @@ class OutboxEntity implements Persistable<UUID> {
     @Column(name = "event_type", nullable = false)
     private String eventType;
 
+    /** Mesajın gideceği Kafka konusu; Debezium yönlendirmeyi buna göre yapar. */
+    @Column(nullable = false)
+    private String destination;
+
     /**
      * Avro ile serileştirilmiş olay. Postgres tarafında {@code bytea}.
      * <p>
@@ -67,11 +71,12 @@ class OutboxEntity implements Persistable<UUID> {
     }
 
     OutboxEntity(UUID id, String aggregateType, String aggregateId, String eventType,
-                 byte[] payload, Instant occurredAt, Instant publishedAt) {
+                 String destination, byte[] payload, Instant occurredAt, Instant publishedAt) {
         this.id = id;
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
+        this.destination = destination;
         this.payload = payload;
         this.occurredAt = occurredAt;
         this.publishedAt = publishedAt;
@@ -107,6 +112,10 @@ class OutboxEntity implements Persistable<UUID> {
 
     String getEventType() {
         return eventType;
+    }
+
+    String getDestination() {
+        return destination;
     }
 
     byte[] getPayload() {

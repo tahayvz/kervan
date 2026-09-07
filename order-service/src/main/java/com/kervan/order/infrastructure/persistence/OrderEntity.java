@@ -69,6 +69,18 @@ class OrderEntity implements Persistable<UUID> {
         // JPA için
     }
 
+    /**
+     * Durum değişikliğini mevcut satıra uygular.
+     *
+     * <p>Yalnızca durum ve zaman değişir. Sipariş satırları ve tutarı, sipariş
+     * verildikten sonra değişmez; onları yeniden yazmak, saga'nın ilerlemesinin
+     * fiyatı değiştirebileceği anlamına gelirdi.
+     */
+    void applyStatus(OrderStatus status, Instant updatedAt) {
+        this.status = status;
+        this.updatedAt = updatedAt;
+    }
+
     OrderEntity(UUID id, String customerId, BigDecimal totalAmount, String currency,
                 OrderStatus status, Instant placedAt, Instant updatedAt) {
         this.id = id;

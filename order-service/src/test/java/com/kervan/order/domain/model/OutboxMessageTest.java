@@ -11,12 +11,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OutboxMessageTest {
 
     private static final Instant NOW = Instant.parse("2026-03-01T10:15:30Z");
+    private static final String TOPIC = "kervan.orders.events";
 
     @Test
     @DisplayName("dışarıdan verilen dizi sonradan değiştirilse bile kayıt bozulmaz")
     void copiesPayloadOnConstruction() {
         byte[] original = {1, 2, 3};
-        OutboxMessage message = OutboxMessage.pending("Order", "order-1", "OrderPlaced", original, NOW);
+        OutboxMessage message = OutboxMessage.pending("Order", "order-1", "OrderPlaced", TOPIC, original, NOW);
 
         original[0] = 99;
 
@@ -27,7 +28,7 @@ class OutboxMessageTest {
     @DisplayName("dönen dizi değiştirilse bile kayıt bozulmaz")
     void copiesPayloadOnRead() {
         OutboxMessage message = OutboxMessage.pending(
-                "Order", "order-1", "OrderPlaced", new byte[]{1, 2, 3}, NOW);
+                "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW);
 
         message.payload()[0] = 99;
 
@@ -38,9 +39,9 @@ class OutboxMessageTest {
     @DisplayName("aynı içerikli iki kayıt eşittir")
     void comparesPayloadByContent() {
         OutboxMessage first = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", new byte[]{1, 2, 3}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null);
         OutboxMessage second = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", new byte[]{1, 2, 3}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null);
 
         // Kayıt tipinin ürettiği equals diziyi referansa göre karşılaştırırdı;
         // içerikleri aynı olan bu ikisi eşit sayılmazdı.
@@ -51,9 +52,9 @@ class OutboxMessageTest {
     @DisplayName("farklı payload'lı kayıtlar eşit değildir")
     void differentPayloadsAreNotEqual() {
         OutboxMessage first = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", new byte[]{1, 2, 3}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null);
         OutboxMessage second = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", new byte[]{9, 9, 9}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{9, 9, 9}, NOW, null);
 
         assertThat(first).isNotEqualTo(second);
     }
@@ -62,7 +63,7 @@ class OutboxMessageTest {
     @DisplayName("toString ikili gövdeyi basmaz, boyutunu yazar")
     void toStringReportsPayloadSizeNotContent() {
         OutboxMessage message = OutboxMessage.pending(
-                "Order", "order-1", "OrderPlaced", new byte[]{1, 2, 3, 4}, NOW);
+                "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3, 4}, NOW);
 
         assertThat(message.toString())
                 .contains("payloadBytes=4")
@@ -73,10 +74,10 @@ class OutboxMessageTest {
     @DisplayName("publishedAt yoksa kayıt yayınlanmamıştır")
     void tracksPublishedState() {
         OutboxMessage pending = OutboxMessage.pending(
-                "Order", "order-1", "OrderPlaced", new byte[]{1}, NOW);
+                "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1}, NOW);
 
         assertThat(pending.isPublished()).isFalse();
-        assertThat(new OutboxMessage("m-1", "Order", "order-1", "OrderPlaced",
+        assertThat(new OutboxMessage("m-1", "Order", "order-1", "OrderPlaced", TOPIC,
                 new byte[]{1}, NOW, NOW).isPublished()).isTrue();
     }
 }

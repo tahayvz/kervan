@@ -6,10 +6,11 @@ import com.kervan.order.application.exception.OrderNotFoundException;
 import com.kervan.order.domain.event.OrderPlaced;
 import com.kervan.order.domain.model.Caller;
 import com.kervan.order.domain.model.Order;
-import com.kervan.order.domain.model.OutboxMessage;
-import com.kervan.order.domain.port.OrderEventSerializer;
+import com.kervan.order.domain.model.OrderSaga;
+import com.kervan.order.domain.model.SagaState;
+import com.kervan.order.domain.port.OrderMessagePublisher;
 import com.kervan.order.domain.port.OrderRepository;
-import com.kervan.order.domain.port.OutboxRepository;
+import com.kervan.order.domain.port.SagaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,27 +39,22 @@ class OrderServiceTest {
     private static final Instant NOW = Instant.parse("2026-01-15T10:00:00Z");
     private static final Caller CUSTOMER = Caller.customer("c-1");
 
-    /** Serileştirilmiş olayın yerine geçen sabit bayt dizisi. */
-    private static final byte[] SERIALISED = {1, 2, 3};
-
     private OrderRepository orderRepository;
-    private OutboxRepository outboxRepository;
-    private OrderEventSerializer eventSerializer;
+    private SagaRepository sagaRepository;
+    private OrderMessagePublisher messages;
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
         orderRepository = mock(OrderRepository.class);
-        outboxRepository = mock(OutboxRepository.class);
-        // Olayın hangi biçimde serileştirildiği bu katmanın işi değil; burada
-        // yalnızca doğru olayın verildiği ve çıktısının outbox'a yazıldığı denetlenir.
-        // Avro biçiminin kendisi AvroOrderEventSerializerTest'te doğrulanır.
-        eventSerializer = mock(OrderEventSerializer.class);
-        when(eventSerializer.serialize(any(OrderPlaced.class))).thenReturn(SERIALISED);
+        sagaRepository = mock(SagaRepository.class);
+        // Mesajın hangi biçimde serileştirildiği ve hangi konuya gittiği bu katmanın
+        // işi değil; o AvroOrderMessagePublisherTest'te doğrulanır.
+        messages = mock(OrderMessagePublisher.class);
         orderService = new OrderService(
                 orderRepository,
-                outboxRepository,
-                eventSerializer,
+                sagaRepository,
+                messages,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -85,32 +83,16 @@ class OrderServiceTest {
         assertThat(result.totalAmount().amount()).isEqualByComparingTo("200.00");
     }
 
-    @Test
-    void placeOrder_shouldWriteOutboxMessageForTheSavedOrder() {
-        repositoryAssignsId("order-1");
-
-        orderService.placeOrder(command(), CUSTOMER);
-
-        ArgumentCaptor<OutboxMessage> captor = ArgumentCaptor.forClass(OutboxMessage.class);
-        verify(outboxRepository).save(captor.capture());
-
-        OutboxMessage message = captor.getValue();
-        assertThat(message.aggregateType()).isEqualTo("Order");
-        assertThat(message.aggregateId()).isEqualTo("order-1");
-        assertThat(message.eventType()).isEqualTo("OrderPlaced");
-        assertThat(message.occurredAt()).isEqualTo(NOW);
-        assertThat(message.isPublished()).isFalse();
-    }
 
     @Test
-    @DisplayName("serileştiriciye verilen olay siparişin bilgilerini taşır")
+    @DisplayName("yayınlanan olay siparişin bilgilerini taşır")
     void placeOrder_shouldBuildEventFromSavedOrder() {
         repositoryAssignsId("order-1");
 
         orderService.placeOrder(command(), CUSTOMER);
 
         ArgumentCaptor<OrderPlaced> captor = ArgumentCaptor.forClass(OrderPlaced.class);
-        verify(eventSerializer).serialize(captor.capture());
+        verify(messages).orderPlaced(captor.capture(), eq(NOW));
 
         OrderPlaced event = captor.getValue();
         assertThat(event.orderId()).isEqualTo("order-1");
@@ -127,16 +109,20 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("outbox kaydına serileştiricinin ürettiği baytlar yazılır")
-    void placeOrder_shouldStoreSerialisedPayload() {
+    @DisplayName("sipariş alınırken saga başlatılır ve ilk komut gönderilir")
+    void placeOrder_shouldStartTheSaga() {
         repositoryAssignsId("order-1");
 
         orderService.placeOrder(command(), CUSTOMER);
 
-        ArgumentCaptor<OutboxMessage> captor = ArgumentCaptor.forClass(OutboxMessage.class);
-        verify(outboxRepository).save(captor.capture());
+        // Saga ve ilk komut siparişle AYNI transaction'da yazılır. Ayrı olsalardı
+        // araya giren bir çökme siparişi oluşturur ama saga'yı hiç başlatmazdı.
+        ArgumentCaptor<OrderSaga> saga = ArgumentCaptor.forClass(OrderSaga.class);
+        verify(sagaRepository).save(saga.capture());
+        assertThat(saga.getValue().orderId()).isEqualTo("order-1");
+        assertThat(saga.getValue().state()).isEqualTo(SagaState.STOCK_RESERVING);
 
-        assertThat(captor.getValue().payload()).isEqualTo(SERIALISED);
+        verify(messages).reserveStock(eq("order-1"), anyList(), eq(NOW));
     }
 
     @Test
@@ -148,7 +134,8 @@ class OrderServiceTest {
         assertThatThrownBy(() -> orderService.placeOrder(command(), CUSTOMER))
                 .isInstanceOf(RuntimeException.class);
 
-        verify(outboxRepository, never()).save(any());
+        verify(messages, never()).orderPlaced(any(), any());
+        verify(sagaRepository, never()).save(any());
     }
 
     @Test
@@ -159,7 +146,7 @@ class OrderServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
 
         verify(orderRepository, never()).save(any());
-        verify(outboxRepository, never()).save(any());
+        verify(messages, never()).orderPlaced(any(), any());
     }
 
     @Test

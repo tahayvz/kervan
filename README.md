@@ -50,7 +50,7 @@ marked done unless its code and tests are in this repository.
 | 4a | **Saga message contracts + topic topology** | ✅ Done |
 | 4b | **Inventory Service — stock reservation, idempotent consumer, compensation** | ✅ Done |
 | 4c | **Payment Service — capture, refund, simulated provider behind a port** | ✅ Done |
-| 4d | Saga orchestrator + end-to-end flow | Planned |
+| 4d | **Saga orchestrator — state machine, compensation, idempotent steps** | ✅ Done |
 | 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
@@ -301,6 +301,40 @@ Service documentation: [payment-service/README.md](payment-service/README.md)
 
 ---
 
+### The saga
+
+An order spans three services, and a distributed transaction across them does not scale.
+The order service drives the flow instead and undoes what it has to when a step fails:
+reserve stock, take payment, confirm — and on failure, release the stock and cancel.
+
+The alternative is choreography, where each service triggers the next. There, the answer
+to "why was this order cancelled" is spread across five services; in a flow whose job is
+undoing things, that makes debugging nearly impossible.
+
+**The saga starts inside the order's own transaction.** The first command is written to
+the outbox alongside the order and its event. Sent as a separate step, a crash in between
+would leave an order that exists while nothing behind it ever started — the customer sees
+a confirmation and nothing happens.
+
+**A failed payment does not cancel the order immediately.** The stock is released first
+and the cancellation follows once compensation completes; otherwise the customer would be
+told the order is cancelled while their stock is still held.
+
+Delivery is at-least-once, so every step locks the saga row and asks the state machine
+whether the transition is legal. An illegal one means the event has already been handled:
+not an error, just ignored. Without the lock two events for the same order could be
+processed side by side and send the same command twice.
+
+Saga state lives in a table, not memory: steps can be minutes apart and a restart in
+between would otherwise forget every order in flight.
+
+The integration test drives both paths over real Kafka, with the other two services'
+replies published by hand. **No test runs all three services together** — each has its own
+end-to-end test and the contracts between them are pinned by `event-contracts`, but that
+is not the same as proving the whole thing runs.
+
+---
+
 ### Event contracts — Avro + Schema Registry
 
 The event that leaves this service is a contract with services that are deployed
@@ -347,7 +381,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Transactional Outbox | own implementation | ✅ |
 | Schema management | Confluent Schema Registry + Avro | ✅ |
 | Change data capture | Debezium (PostgreSQL WAL + MongoDB change streams) | ✅ |
-| Saga orchestration | own implementation | in progress |
+| Saga orchestration | own implementation | ✅ |
 | Search | Elasticsearch | planned |
 | Cache / locking / rate limiting | Redis | planned |
 | API gateway | Spring Cloud Gateway | ✅ |

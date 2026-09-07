@@ -44,5 +44,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("kervan.schema-registry.url", () -> "mock://order-service-tests");
+        registry.add("spring.kafka.consumer.properties.schema.registry.url",
+                () -> "mock://order-service-tests");
     }
 }
