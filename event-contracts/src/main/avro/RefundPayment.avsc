@@ -1,0 +1,41 @@
+{
+  "namespace": "com.kervan.contracts.payment.v1",
+  "type": "record",
+  "name": "RefundPayment",
+  "doc": "KOMUT (telafi): alinmis odemeyi iade eder. Odeme sonrasi bir adim basarisiz olursa gonderilir.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "paymentId",
+      "type": "string",
+      "doc": "Iade edilecek odeme."
+    },
+    {
+      "name": "amount",
+      "type": {
+        "type": "bytes",
+        "logicalType": "decimal",
+        "precision": 19,
+        "scale": 4
+      },
+      "doc": "Iade tutari."
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "doc": "ISO 4217 kodu."
+    },
+    {
+      "name": "requestedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Komutun uretildigi an."
+    }
+  ]
+}

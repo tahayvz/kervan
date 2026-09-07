@@ -1,0 +1,26 @@
+{
+  "namespace": "com.kervan.contracts.inventory.v1",
+  "type": "record",
+  "name": "StockReservationFailed",
+  "doc": "OLAY: stok ayrilamadi. Saga bu noktada telafiye gecmez -- henuz yapilmis bir sey yoktur; siparis dogrudan iptal edilir.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "reason",
+      "type": "string",
+      "doc": "Insan icin aciklama. Saga bunun ICERIGINE gore dallanmaz: hangi sebeple olursa olsun sonuc aynidir. Metin, sorun ararken okunmak icindir."
+    },
+    {
+      "name": "failedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Basarisizligin an'i."
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "namespace": "com.kervan.contracts.payment.v1",
+  "type": "record",
+  "name": "PaymentFailed",
+  "doc": "OLAY: odeme alinamadi. Saga burada TELAFIYE gecer: stok zaten ayrilmisti, geri birakilmali.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "reason",
+      "type": "string",
+      "doc": "Insan icin aciklama; saga icerigine gore dallanmaz."
+    },
+    {
+      "name": "failedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Basarisizligin an'i."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "namespace": "com.kervan.contracts.order.v1",
+  "type": "record",
+  "name": "OrderConfirmed",
+  "doc": "OLAY: saga basariyla tamamlandi; stok ayrildi, odeme alindi, siparis onaylandi.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "confirmedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Onayin an'i."
+    }
+  ]
+}

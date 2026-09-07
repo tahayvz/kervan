@@ -15,9 +15,30 @@ bağımlı olur.
 
 ## Şemalar
 
-| Dosya | Olay | Yayınlayan |
+Mesajlar iki türlüdür ve ayrım kasıtlıdır (ADR-0009):
+
+- **Komut** bir niyettir, tek bir alıcıya yöneliktir, adı emir kipindedir
+  (`ReserveStock`). Reddedilebilir.
+- **Olay** olan bitenin duyurusudur, adı geçmiş zamandır (`StockReserved`).
+  Reddedilemez — zaten olmuştur.
+
+| Konu | Tipler | Tür |
 |---|---|---|
-| `src/main/avro/OrderPlaced.avsc` | `OrderPlaced` | order-service |
+| `kervan.orders.events` | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | olay |
+| `kervan.inventory.commands` | `ReserveStock`, `ReleaseStock` | komut |
+| `kervan.inventory.events` | `StockReserved`, `StockReservationFailed`, `StockReleased` | olay |
+| `kervan.payments.commands` | `ProcessPayment`, `RefundPayment` | komut |
+| `kervan.payments.events` | `PaymentProcessed`, `PaymentFailed`, `PaymentRefunded` | olay |
+
+**Hepsi `orderId` taşır.** Mesajlar bu anahtarla yazılır: bir siparişin bütün adımları
+aynı partition'a düşer ve sırası korunur. Sıra yalnızca tek bir konu içinde ve aynı
+anahtar için korunduğundan, bu alanı taşımayan bir mesaj sıra garantisinin dışına
+düşer — üstelik sessizce. `SagaContractsTest` bu kuralı klasördeki her dosya için
+denetler.
+
+**Aynı konuda birden çok tip var**, bu yüzden subject adlandırma stratejisi
+`TopicRecordNameStrategy`: subject `<konu>-<kayıt tam adı>` olur. Varsayılan strateji
+konu başına tek şema kabul ederdi ve ikinci tip reddedilirdi. Gerekçe: ADR-0009.
 
 Java sınıfları elle yazılmaz. `mvn generate-sources` şemadan üretir; tek doğru kaynak
 `.avsc` dosyasıdır. Şemayı değiştirip sınıfı güncellemeyi unutmak mümkün değildir.
@@ -63,5 +84,6 @@ mvn -pl event-contracts test
 
 | Test | Neyi doğrular |
 |---|---|
+| `SagaContractsTest` | Bütün şemalarda ortak kurallar: her mesajda `orderId`, her para alanında aynı ölçek, her zaman damgasında aynı çözünürlük |
 | `OrderPlacedSerializationTest` | Olay ikili biçime yazılıp aynı değerlerle geri okunuyor; tutar son basamağına kadar korunuyor; 3 ondalıklı para birimleri sığıyor; şemaya sığmayan hassasiyet sessizce yuvarlanmıyor |
 | `SchemaEvolutionTest` | Hangi şema değişikliğinin güvenli, hangisinin yıkıcı olduğu |

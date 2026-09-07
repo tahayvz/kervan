@@ -1,0 +1,26 @@
+{
+  "namespace": "com.kervan.contracts.inventory.v1",
+  "type": "record",
+  "name": "ReleaseStock",
+  "doc": "KOMUT (telafi): daha once ayrilmis stogu geri birakir. Odeme basarisiz oldugunda gonderilir.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "reservationId",
+      "type": "string",
+      "doc": "Geri birakilacak ayirma."
+    },
+    {
+      "name": "requestedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Komutun uretildigi an."
+    }
+  ]
+}

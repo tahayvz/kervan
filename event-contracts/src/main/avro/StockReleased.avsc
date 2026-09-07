@@ -1,0 +1,26 @@
+{
+  "namespace": "com.kervan.contracts.inventory.v1",
+  "type": "record",
+  "name": "StockReleased",
+  "doc": "OLAY: ayrilmis stok geri birakildi. Telafinin tamamlandigini bildirir.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "reservationId",
+      "type": "string",
+      "doc": "Geri birakilan ayirma."
+    },
+    {
+      "name": "releasedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Geri birakmanin an'i."
+    }
+  ]
+}

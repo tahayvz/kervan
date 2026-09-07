@@ -1,0 +1,41 @@
+{
+  "namespace": "com.kervan.contracts.payment.v1",
+  "type": "record",
+  "name": "PaymentProcessed",
+  "doc": "OLAY: odeme alindi. Saga bu noktada siparisi onaylar.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "paymentId",
+      "type": "string",
+      "doc": "Odemenin kimligi. Iade bu kimlikle yapilir."
+    },
+    {
+      "name": "amount",
+      "type": {
+        "type": "bytes",
+        "logicalType": "decimal",
+        "precision": 19,
+        "scale": 4
+      },
+      "doc": "Tahsil edilen tutar."
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "doc": "ISO 4217 kodu."
+    },
+    {
+      "name": "processedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Tahsilatin an'i."
+    }
+  ]
+}

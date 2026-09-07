@@ -1,0 +1,26 @@
+{
+  "namespace": "com.kervan.contracts.order.v1",
+  "type": "record",
+  "name": "OrderCancelled",
+  "doc": "OLAY: saga basarisiz bitti ve yapilmis her adim geri alindi; siparis iptal edildi.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "reason",
+      "type": "string",
+      "doc": "Iptalin sebebi; musteriye gosterilebilir bir aciklamanin kaynagi."
+    },
+    {
+      "name": "cancelledAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Iptalin an'i."
+    }
+  ]
+}

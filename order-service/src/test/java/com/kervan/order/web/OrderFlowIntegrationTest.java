@@ -196,6 +196,9 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
                 "key.deserializer", StringDeserializer.class.getName(),
                 "value.deserializer", KafkaAvroDeserializer.class.getName(),
                 AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "mock://order-service-tests",
+                // Tüketici tarafında subject stratejisi ayarlanmaz: şemayı mesajın
+                // içindeki kimlikten çeker, subject adına hiç bakmaz. Strateji
+                // yalnızca üreticinin kaydı hangi ad altına yazdığını belirler.
                 // Genel amaçlı GenericRecord değil, şemadan üretilen sınıf dönsün.
                 KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, "true"));
         return new KafkaConsumer<>(props);

@@ -1,0 +1,26 @@
+{
+  "namespace": "com.kervan.contracts.payment.v1",
+  "type": "record",
+  "name": "PaymentRefunded",
+  "doc": "OLAY: odeme iade edildi. Telafinin tamamlandigini bildirir.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "paymentId",
+      "type": "string",
+      "doc": "Iade edilen odeme."
+    },
+    {
+      "name": "refundedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Iadenin an'i."
+    }
+  ]
+}

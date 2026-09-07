@@ -1,0 +1,47 @@
+{
+  "namespace": "com.kervan.contracts.inventory.v1",
+  "type": "record",
+  "name": "ReserveStock",
+  "doc": "KOMUT: siparis icin stok ayrilmasini ister. Komut olaydan farklidir: tek bir alici icin niyet bildirir, olan biteni duyurmaz.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "items",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "ReservationItem",
+          "doc": "Ayrilacak tek bir kalem.",
+          "fields": [
+            {
+              "name": "productId",
+              "type": "string"
+            },
+            {
+              "name": "sku",
+              "type": "string"
+            },
+            {
+              "name": "quantity",
+              "type": "int"
+            }
+          ]
+        }
+      },
+      "doc": "Ayrilacak kalemler."
+    },
+    {
+      "name": "requestedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Komutun uretildigi an (UTC, milisaniye)."
+    }
+  ]
+}

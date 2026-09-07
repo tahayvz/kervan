@@ -1,0 +1,26 @@
+{
+  "namespace": "com.kervan.contracts.inventory.v1",
+  "type": "record",
+  "name": "StockReserved",
+  "doc": "OLAY: stok ayrildi. Telafi gerektiginde ReleaseStock icin reservationId kullanilir.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Saga'nin kimligi. Butun komut ve olaylar bu anahtarla yazilir; ayni siparisin adimlari ayni partition'a duser ve sirasi korunur."
+    },
+    {
+      "name": "reservationId",
+      "type": "string",
+      "doc": "Ayirmanin kimligi. Telafi bu kimlikle yapilir; siparis kimligiyle degil, cunku ayni siparis icin birden fazla ayirma denemesi olabilir."
+    },
+    {
+      "name": "reservedAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Ayirmanin yapildigi an."
+    }
+  ]
+}

@@ -90,15 +90,18 @@ class AvroOrderEventSerializerTest {
     }
 
     @Test
-    @DisplayName("şema, konu adından türetilen subject altına kaydedilir")
-    void registersSchemaUnderTopicNameSubject() throws Exception {
+    @DisplayName("şema, konu ve kayıt adından türetilen subject altına kaydedilir")
+    void registersSchemaUnderTopicRecordNameSubject() throws Exception {
         serializer.serialize(event());
 
         SchemaRegistryClient client = MockSchemaRegistry.getClientForScope(SCOPE);
 
-        // Varsayılan adlandırma stratejisi: <topic>-value. Bir konudaki değerlerin
-        // şeması bu ad altında sürümlenir; uyumluluk kuralı da bu ad için tanımlıdır.
-        assertThat(client.getAllSubjects()).containsExactly(TOPIC + "-value");
+        // Varsayılan strateji <topic>-value olurdu: konu başına tek şema. Bu proje
+        // aynı konuya birden çok olay tipi yazar (OrderPlaced, OrderConfirmed,
+        // OrderCancelled), o yüzden subject kayıt adını da içerir. Aksi hâlde ikinci
+        // tip, birincinin uyumsuz bir sürümü sayılıp reddedilirdi.
+        assertThat(client.getAllSubjects())
+                .containsExactly(TOPIC + "-com.kervan.contracts.order.v1.OrderPlaced");
     }
 
     @Test

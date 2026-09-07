@@ -22,6 +22,7 @@ kararı veren kişi ekipten ayrıldığında gerekçe onunla birlikte gitmez.
 - [ADR-0006](0006-polyglot-persistence-mongodb.md) — Polyglot persistence: Catalog MongoDB, çekirdek PostgreSQL
 - [ADR-0007](0007-gateway-authenticates-services-authorize.md) — Ağ geçidi kimlik doğrular, yetkiyi servisler denetler
 - [ADR-0008](0008-avro-schema-registry.md) — Olay biçimi: Avro + Schema Registry (JSON değil)
+- [ADR-0009](0009-saga-message-topology.md) — Saga mesaj topolojisi: komut/olay ayrımı, konu başına çok tip
 
 ## Yeni ADR nasıl yazılır
 `NNNN-kisa-baslik.md` adıyla, `_template.md`'yi kopyalayarak.
