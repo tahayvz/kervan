@@ -128,6 +128,22 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("3 ondalıklı para biriminde sipariş alınır")
+    void placeOrder_shouldAcceptThreeDecimalCurrency() {
+        // KWD'nin ondalık hane sayısı 3, TRY'nin 2. Olay şeması para alanlarını
+        // 2 ondalıkla tanımlasaydı bu sipariş serileştirme sırasında patlar ve
+        // istemciye 500 dönerdi — üstelik doğrulamadan geçmiş, geçerli bir istek için.
+        PlaceOrderRequest kuwaitiOrder = new PlaceOrderRequest("KWD", List.of(
+                new PlaceOrderRequest.Line("p-1", "SKU-1", 1, new BigDecimal("10.555"))));
+
+        ResponseEntity<OrderResponse> response =
+                rest.exchange("/api/v1/orders", HttpMethod.POST, authed(kuwaitiOrder), OrderResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().totalAmount()).isEqualByComparingTo("10.555");
+    }
+
+    @Test
     void unknownOrder_shouldReturnProblemDetail() {
         ResponseEntity<String> response =
                 rest.exchange("/api/v1/orders/" + UUID.randomUUID(), HttpMethod.GET, authed(), String.class);

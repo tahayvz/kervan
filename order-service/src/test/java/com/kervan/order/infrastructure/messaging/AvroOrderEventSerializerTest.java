@@ -102,12 +102,31 @@ class AvroOrderEventSerializerTest {
     }
 
     @Test
-    @DisplayName("kuruşun altında kalıntı varsa serileştirme hata verir")
-    void rejectsAmountWithUnexpectedScale() {
-        // Şemadaki decimal ölçeği 2. Üçüncü basamakta bir değer varsa bu, tutarın
-        // sessizce yuvarlanacağı değil, yanlış hesaplandığı anlamına gelir.
+    @DisplayName("3 ondalıklı para birimi kayıpsız serileştirilir")
+    void serialisesThreeDecimalCurrency() {
+        // KWD'nin ondalık hane sayısı 3; Money tutarı ölçek 3 ile tutar. Şema ölçeği
+        // 2 olsaydı bu olay serileştirilemez, sipariş 500 ile reddedilirdi.
+        OrderPlaced kuwaitiOrder = new OrderPlaced(
+                "order-1", "c-1", new BigDecimal("10.555"), "KWD",
+                List.of(new OrderPlaced.Item("p-1", "SKU-1", 1, new BigDecimal("10.555"))),
+                PLACED_AT);
+
+        com.kervan.contracts.order.v1.OrderPlaced decoded =
+                (com.kervan.contracts.order.v1.OrderPlaced)
+                        deserializer.deserialize(TOPIC, serializer.serialize(kuwaitiOrder));
+
+        assertThat(decoded.getCurrency()).isEqualTo("KWD");
+        assertThat(decoded.getTotalAmount()).isEqualByComparingTo("10.555");
+    }
+
+    @Test
+    @DisplayName("şemaya sığmayan hassasiyet sessizce yuvarlanmaz")
+    void rejectsAmountWithMorePrecisionThanSchema() {
+        // Şema ölçeği 4. Beşinci basamakta bir değer varsa bu, olayın Money
+        // kullanılmadan üretildiği anlamına gelir — programlama hatası. Sessizce
+        // yuvarlayıp yanlış tutar yayınlamaktansa burada durmak doğrudur.
         OrderPlaced broken = new OrderPlaced(
-                "order-1", "c-1", new BigDecimal("249.905"), "TRY",
+                "order-1", "c-1", new BigDecimal("249.90501"), "TRY",
                 List.of(new OrderPlaced.Item("p-1", "SKU-1", 2, new BigDecimal("124.95"))),
                 PLACED_AT);
 

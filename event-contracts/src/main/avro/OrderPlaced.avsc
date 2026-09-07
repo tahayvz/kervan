@@ -20,9 +20,9 @@
         "type": "bytes",
         "logicalType": "decimal",
         "precision": 19,
-        "scale": 2
+        "scale": 4
       },
-      "doc": "Toplam tutar. double DEGIL: kayan nokta para hesabinda yuvarlama hatasi uretir. Avro decimal, degeri olceklenmis tamsayi olarak byte dizisinde tasir; okuyan taraf ayni BigDecimal'i geri elde eder."
+      "doc": "Toplam tutar. double DEGIL: kayan nokta para hesabinda yuvarlama hatasi uretir. Avro decimal, degeri olceklenmis tamsayi olarak byte dizisinde tasir; okuyan taraf ayni BigDecimal'i geri elde eder. Olcek 4, veritabanindaki NUMERIC(19,4) ile ayni: 3 ondalikli para birimleri (KWD, BHD, OMR) de kayipsiz sigar. Yazan taraf degeri tam olarak bu olcege getirmelidir; Avro farkli olcekli bir degeri kabul etmez."
     },
     {
       "name": "currency",
@@ -47,7 +47,7 @@
                 "type": "bytes",
                 "logicalType": "decimal",
                 "precision": 19,
-                "scale": 2
+                "scale": 4
               },
               "doc": "Siparis anindaki birim fiyat. Urunun guncel fiyati sonradan degisse bile bu deger degismez."
             }

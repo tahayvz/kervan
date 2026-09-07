@@ -2,6 +2,7 @@ package com.kervan.contracts;
 
 import com.kervan.contracts.order.v1.OrderItem;
 import com.kervan.contracts.order.v1.OrderPlaced;
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Olayın Avro ikili biçimine yazılıp aynen geri okunabildiğini doğrular.
@@ -39,17 +41,61 @@ class OrderPlacedSerializationTest {
     }
 
     @Test
-    @DisplayName("tutar kuruşuna kadar korunur")
+    @DisplayName("tutar son basamağına kadar korunur")
     void keepsMonetaryAmountExact() throws IOException {
         OrderPlaced original = OrderPlaced.newBuilder(sampleOrder())
-                .setTotalAmount(new BigDecimal("1299.99"))
+                .setTotalAmount(new BigDecimal("1299.9900"))
                 .build();
 
         OrderPlaced decoded = decode(encode(original));
 
         // compareTo değil isEqualTo: ölçek (scale) de aynı kalmalı.
-        // 1299.99 ile 1299.990 aynı sayıdır ama aynı para gösterimi değildir.
-        assertThat(decoded.getTotalAmount()).isEqualTo(new BigDecimal("1299.99"));
+        assertThat(decoded.getTotalAmount()).isEqualTo(new BigDecimal("1299.9900"));
+    }
+
+    @Test
+    @DisplayName("3 ondalıklı para birimleri kayıpsız taşınır")
+    void carriesThreeDecimalCurrenciesWithoutLoss() throws IOException {
+        // KWD'nin ondalık hane sayısı 3. Şema ölçeği 2 olsaydı bu tutar taşınamazdı;
+        // ölçek veritabanındaki NUMERIC(19,4) ile aynı tutulduğu için sığıyor.
+        OrderPlaced original = OrderPlaced.newBuilder(sampleOrder())
+                .setCurrency("KWD")
+                .setTotalAmount(new BigDecimal("10.5550"))
+                .build();
+
+        OrderPlaced decoded = decode(encode(original));
+
+        assertThat(decoded.getCurrency()).isEqualTo("KWD");
+        assertThat(decoded.getTotalAmount()).isEqualTo(new BigDecimal("10.5550"));
+    }
+
+    @Test
+    @DisplayName("şemadan dar bir ölçek sıfırlarla tamamlanır")
+    void padsNarrowerScale() throws IOException {
+        OrderPlaced narrower = OrderPlaced.newBuilder(sampleOrder())
+                .setTotalAmount(new BigDecimal("1299.99"))
+                .build();
+
+        OrderPlaced decoded = decode(encode(narrower));
+
+        // Ölçeği büyütmek kayıpsızdır, Avro buna izin verir ve değeri şemanın
+        // ölçeğine getirir. Yani okuyan taraf her zaman ölçek 4 görür.
+        assertThat(decoded.getTotalAmount()).isEqualTo(new BigDecimal("1299.9900"));
+    }
+
+    @Test
+    @DisplayName("şemaya sığmayan hassasiyet sessizce yuvarlanmaz, hata verir")
+    void rejectsAmountWithMorePrecisionThanSchema() {
+        // Ölçeği küçültmek bilgi kaybıdır. Avro bunu sessizce yuvarlamak yerine
+        // hata verir: yayınlanan tutarın istenenden farklı olması, hata almaktan
+        // daha kötüdür.
+        OrderPlaced tooPrecise = OrderPlaced.newBuilder(sampleOrder())
+                .setTotalAmount(new BigDecimal("1299.99999"))
+                .build();
+
+        assertThatThrownBy(() -> encode(tooPrecise))
+                .isInstanceOf(AvroTypeException.class)
+                .hasMessageContaining("without rounding");
     }
 
     @Test
@@ -81,13 +127,13 @@ class OrderPlacedSerializationTest {
         return OrderPlaced.newBuilder()
                 .setOrderId("11111111-1111-1111-1111-111111111111")
                 .setCustomerId("musteri-1")
-                .setTotalAmount(new BigDecimal("259.90"))
+                .setTotalAmount(new BigDecimal("259.9000"))
                 .setCurrency("TRY")
                 .setItems(List.of(OrderItem.newBuilder()
                         .setProductId("urun-1")
                         .setSku("SKU-1")
                         .setQuantity(2)
-                        .setUnitPrice(new BigDecimal("129.95"))
+                        .setUnitPrice(new BigDecimal("129.9500"))
                         .build()))
                 .setPlacedAt(Instant.parse("2026-03-01T10:15:30Z"))
                 .build();

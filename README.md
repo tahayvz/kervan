@@ -249,7 +249,8 @@ OrderPlaced.avsc ──generate──▶ Java class ──serialise──▶ [0x
 
 The message carries the schema **id**, not the schema, so the payload stays small and the
 consumer fetches the schema once. Money is carried as Avro `decimal`, not `double` — a
-floating point kuruş is a wrong invoice.
+floating point kuruş is a wrong invoice — at the same scale as the database column, so a
+three-decimal currency such as KWD fits without loss.
 
 The registry's rule is also asserted at build time. `SchemaEvolutionTest` proves that
 adding an optional field with a default is safe in both directions, and that adding a

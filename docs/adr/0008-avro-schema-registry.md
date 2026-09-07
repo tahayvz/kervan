@@ -50,6 +50,8 @@ Bu, "önce tüketiciyi güncelle, sonra üreticiyi" sırasını mümkün kılar.
 
 - **Olumlu:** Uyumsuz şema değişikliği Registry tarafından reddedilir; hata dağıtımdan
   önce görülür. Mesaj boyutu küçülür. Para `decimal` olarak taşınır, kuruş kaybolmaz.
+  Ölçek veritabanındaki `NUMERIC(19,4)` ile aynı tutuldu: sözleşmenin depodan dar
+  olması için bir sebep yok ve dar olsaydı 3 ondalıklı para birimleri sığmazdı.
   Şema tek yerde durduğu için "hangi sürüm doğru" tartışması ortadan kalkar.
 
 - **Olumsuz / ödünler:** Altyapıya bir bileşen daha eklenir (Schema Registry) ve o

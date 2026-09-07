@@ -17,8 +17,16 @@ import java.util.List;
  */
 final class OrderPlacedAvroMapper {
 
-    /** Şemadaki {@code decimal} alanların ölçeği; para alanları bu ölçeğe getirilir. */
-    private static final int MONEY_SCALE = 2;
+    /**
+     * Şemadaki {@code decimal} alanların ölçeği; para alanları bu ölçeğe getirilir.
+     * <p>
+     * Değer 4, veritabanındaki {@code NUMERIC(19,4)} ile aynı. Daha dar bir ölçek
+     * (örneğin 2) 3 ondalıklı para birimlerini (KWD, BHD, OMR) taşıyamazdı:
+     * {@link com.kervan.order.domain.model.Money} tutarı para biriminin ondalık hane
+     * sayısına getirir, yani KWD için ölçek 3 olur ve 2'ye indirmek hata verirdi.
+     * Sözleşmenin depodan dar olması için bir sebep yok.
+     */
+    private static final int MONEY_SCALE = 4;
 
     private OrderPlacedAvroMapper() {
     }
@@ -48,9 +56,11 @@ final class OrderPlacedAvroMapper {
      * {@link BigDecimal} verilirse Avro serileştirme sırasında hata verir; bu yüzden
      * ölçek burada açıkça ayarlanır.
      *
-     * <p>{@code UNNECESSARY} bilinçli seçimdir: kuruşun altında bir kalıntı varsa
-     * bu sessizce yuvarlanacak bir durum değil, tutarın yanlış hesaplandığının
-     * işaretidir ve hata vermelidir.
+     * <p>{@code UNNECESSARY} bilinçli seçimdir. {@code Money} tutarı en fazla 3
+     * ondalıkla tuttuğu için normal akışta ölçeği 4'e çıkarmak her zaman kayıpsızdır
+     * ve bu satır hata vermez. Hata verdiği tek durum, olayın {@code Money}
+     * kullanılmadan üretilmiş olmasıdır — yani bir programlama hatası. Sessizce
+     * yuvarlayıp yanlış tutar yayınlamaktansa orada durmak doğrudur.
      */
     private static BigDecimal scaled(BigDecimal amount) {
         return amount.setScale(MONEY_SCALE, RoundingMode.UNNECESSARY);

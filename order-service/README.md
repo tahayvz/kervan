@@ -91,7 +91,8 @@ Serileştirme neden transaction'ın içinde? Şema Registry tarafından reddedil
 sipariş oluşturmaktansa isteği reddetmek doğrudur.
 
 Para alanları Avro `decimal` ile taşınır, `double` ile değil: kayan noktada kuruş
-yuvarlanır ve fatura yanlış çıkar.
+yuvarlanır ve fatura yanlış çıkar. Ölçek, veritabanındaki `NUMERIC(19,4)` ile aynı
+tutuldu; böylece 3 ondalıklı para birimleri (KWD, BHD, OMR) de kayıpsız sığar.
 
 Karar kaydı: [ADR-0008](../docs/adr/0008-avro-schema-registry.md)
 
@@ -166,7 +167,7 @@ Servis `http://localhost:8082`, OpenAPI arayüzü `/swagger-ui.html`.
 mvn -pl order-service test
 ```
 
-95 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
+97 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
 sipariş toplamı), use-case testleri (mock port'larla), yayıncı testleri (anahtarlama,
 başarısız gönderimde işaretlememe, deneme sayacı, turun durması), Avro serileştirici
 testleri (kablo biçimi, şemanın hangi ad altında kaydedildiği, ölçeği bozuk tutarın
