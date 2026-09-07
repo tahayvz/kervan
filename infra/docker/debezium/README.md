@@ -34,6 +34,13 @@ blok değişikliğini; Debezium bu günlükten satırı çözemez.
 docker compose -f infra/docker/docker-compose.yml up -d postgres kafka schema-registry connect
 ```
 
+**Uygulama içi yayıncıyı kapat.** Bu adım atlanırsa her olay iki kez gider: biri
+Debezium'dan, biri `OutboxPublisher`'dan. Varsayılan açıktır.
+
+```bash
+KERVAN_OUTBOX_PUBLISHER_ENABLED=false mvn -pl order-service spring-boot:run
+```
+
 Konektörü kaydet:
 
 ```bash
@@ -61,8 +68,13 @@ yeniden biçimlendirmesine gerek yok; olduğu gibi taşır. Payload JSON olarak
 saklansaydı Connect'in şemayı **çıkarım yoluyla** üretmesi gerekirdi ve bu, bizim
 `event-contracts` modülünde yazılı olan sözleşme olmazdı (ADR-0008).
 
-**`route.topic.replacement` sabit.** Normalde konu adı `aggregate_type` alanından
-türetilir. Burada sabit tutuldu ki Debezium ile uygulama içi yayıncı **aynı konuya**
+**`route.topic.replacement` sabit.** Aynı konu adı uygulamanın
+`kervan.outbox.topic` ayarında da yazılı. İkisi ayrı sistemde olduğu için ortak bir
+sabitte tutulamıyor; biri değişirse diğeri de değişmelidir. Uyuşmazlıkta mesajlar
+kırılmaz (şema kimliği mesajın içinde taşınır) ama şema, mesajların düşmediği bir
+konu adının altına kaydedilir ve kayıt defteri yanıltıcı hâle gelir.
+
+Normalde konu adı `aggregate_type` alanından türetilir. Burada sabit tutuldu ki Debezium ile uygulama içi yayıncı **aynı konuya**
 yazsın; birinden diğerine geçmek tüketicileri etkilemesin.
 
 **`table.field.event.timestamp` kullanılmadı.** Olayın iş zamanı (`placedAt`) zaten
@@ -70,6 +82,22 @@ Avro gövdesinin içinde. Aynı bilgiyi bir de Kafka kaydının zaman damgasına
 `TIMESTAMPTZ` sütununu Connect'in beklediği türe çevirmeyi gerektirir ve kırılgandır.
 Kayıt zaman damgası olarak Debezium'un kendi olay zamanı bırakıldı; o da değişikliğin
 gerçekte ne zaman olduğunu söyler.
+
+**`snapshot.mode` = `no_data`.** Varsayılan `initial` olsaydı konektör ilk
+başladığında tabloyu baştan tarar ve **mevcut tüm satırları** olay olarak yayınlardı.
+Outbox'ta yayınlanmış geçmiş kayıtlar durduğu için, polling'den CDC'ye geçen bir
+sistemde bu, sipariş geçmişinin tamamının yeniden yayınlanması demekti. `no_data`
+konektörü mevcut WAL konumundan başlatır.
+
+**`publication.autocreate.mode` = `filtered`.** Varsayılan `all_tables`, `CREATE
+PUBLICATION ... FOR ALL TABLES` çalıştırır: superuser ister ve `orders`,
+`order_lines` değişikliklerini de WAL'dan çözer — hepsi `table.include.list` ile
+sonradan elenir, yani boşa iş. `filtered` yalnızca izin listesindeki tabloyu yayınlar.
+
+**`heartbeat.interval.ms` = `10000`.** Outbox sessizken ama veritabanının geri kalanı
+meşgulken slot'un onaylanan konumu ilerlemez ve WAL birikir. Heartbeat, konektörün
+okuduğu konumu düzenli olarak bildirmesini sağlar. Veritabanı **tümüyle** sessizse
+bu da yetmez; o durumda `heartbeat.action.query` ile küçük bir yazma yaptırmak gerekir.
 
 **`binary.handling.mode` = `bytes`.** Varsayılanı `bytes`tir ama açıkça yazıldı:
 `base64` olsaydı gövde bir kez daha kodlanır ve tüketici Avro yerine metin görürdü.
@@ -100,6 +128,26 @@ Apple Silicon'da emülasyonla çalışır (yavaş ama çalışır).
 Test ayrıca, konteyner yine de kalkmazsa **yerelde** kendini atlar ve sebebini
 yazar. CI ortamında atlama yoktur: orada başlatma hatası doğrudan teste yansır,
 böylece konektör ayarındaki bir hata görünmeden kalmaz.
+
+## Veritabanı kullanıcısının ihtiyacı olan yetkiler
+
+Debezium tabloyu okumaz, replikasyon akışı açar. Bunun için kullanıcıya normal
+`SELECT` yetkisi yetmez:
+
+```sql
+-- Replikasyon akışı açabilmek için
+ALTER ROLE kervan WITH REPLICATION;
+
+-- publication.autocreate.mode=filtered kullanıcının publication yaratmasını ister;
+-- tabloların sahibi olması ya da publication'ın önceden açılmış olması gerekir.
+CREATE PUBLICATION kervan_order_outbox_pub FOR TABLE public.outbox_messages;
+```
+
+Publication'ı önceden açarsan Debezium onu kullanır ve kullanıcının `CREATE`
+yetkisine ihtiyaç kalmaz. Üretimde tercih edilen budur: yetkiyi uygulamaya değil,
+dağıtım adımına vermek.
+
+Lokal compose'da bu adımlar gerekmez; oradaki kullanıcı zaten superuser.
 
 ## İşletim tuzağı: replication slot
 

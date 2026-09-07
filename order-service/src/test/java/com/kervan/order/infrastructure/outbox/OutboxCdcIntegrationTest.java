@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -65,6 +66,9 @@ class OutboxCdcIntegrationTest {
 
     private static final String TOPIC = "kervan.orders.events";
     private static final String REGISTRY_URL = "mock://outbox-cdc-it";
+    /** Konektör ayarındaki {@code slot.name} ile aynı olmalı. */
+    private static final String SLOT_NAME = "kervan_order_outbox";
+
     private static final Path CONNECTOR_CONFIG =
             Path.of("../infra/docker/debezium/order-outbox-connector.json");
 
@@ -133,6 +137,7 @@ class OutboxCdcIntegrationTest {
                 .migrate();
 
         registerConnector();
+        awaitReplicationSlotStreaming();
     }
 
     @Test
@@ -213,11 +218,11 @@ class OutboxCdcIntegrationTest {
 
     /** Depodaki gerçek ayar dosyasını yükler, yalnızca bağlantı bilgilerini değiştirir. */
     private static void registerConnector() throws Exception {
-        String config = Files.readString(CONNECTOR_CONFIG, StandardCharsets.UTF_8)
-                .replace("\"database.user\": \"kervan\"",
-                        "\"database.user\": \"" + POSTGRES.getUsername() + "\"")
-                .replace("\"database.password\": \"kervan\"",
-                        "\"database.password\": \"" + POSTGRES.getPassword() + "\"");
+        String original = Files.readString(CONNECTOR_CONFIG, StandardCharsets.UTF_8);
+        String config = replaceOnce(original, "\"database.user\": \"kervan\"",
+                "\"database.user\": \"" + POSTGRES.getUsername() + "\"");
+        config = replaceOnce(config, "\"database.password\": \"kervan\"",
+                "\"database.password\": \"" + POSTGRES.getPassword() + "\"");
 
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder()
@@ -233,6 +238,45 @@ class OutboxCdcIntegrationTest {
         assertThat(response.statusCode())
                 .withFailMessage("Konektör kaydedilemedi: %s", response.body())
                 .isEqualTo(201);
+    }
+
+    /**
+     * Metin değişimini yapar ve <b>gerçekten yapıldığını</b> doğrular.
+     *
+     * <p>Sessizce boşa düşen bir değişim, testi 60 saniye sonra "olay gelmedi" diye
+     * kırardı ve hata mesajı yanlış yeri gösterirdi. Ayar dosyası yeniden
+     * biçimlendirildiğinde ya da parola değiştiğinde burada, sebebiyle birlikte durur.
+     */
+    private static String replaceOnce(String text, String target, String replacement) {
+        assertThat(text)
+                .withFailMessage("Konektör ayarında beklenen metin yok: %s "
+                        + "(dosya değiştiyse bu testteki değişimi de güncelleyin)", target)
+                .contains(target);
+        return text.replace(target, replacement);
+    }
+
+    /**
+     * Debezium'un replication slot'u açıp akışa başlamasını bekler.
+     *
+     * <p>{@code snapshot.mode=no_data} olduğu için konektör tabloyu taramaz; yalnızca
+     * slot açıldıktan <b>sonraki</b> değişiklikleri görür. Slot hazır olmadan satır
+     * yazılırsa o olay hiç yayınlanmaz ve test rastgele kırılırdı.
+     *
+     * <p>Konektörün REST durumu yerine doğrudan veritabanına bakılıyor: {@code RUNNING}
+     * görevin başladığını söyler, slot'un akışa geçtiğini söylemez.
+     */
+    private static void awaitReplicationSlotStreaming() {
+        await().atMost(Duration.ofSeconds(60)).until(() -> {
+            try (Connection connection = DriverManager.getConnection(
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                 PreparedStatement statement = connection.prepareStatement(
+                         "SELECT active FROM pg_replication_slots WHERE slot_name = ?")) {
+                statement.setString(1, SLOT_NAME);
+                try (ResultSet rows = statement.executeQuery()) {
+                    return rows.next() && rows.getBoolean("active");
+                }
+            }
+        });
     }
 
     private static void insertOutboxRow(String orderId, byte[] payload) throws Exception {

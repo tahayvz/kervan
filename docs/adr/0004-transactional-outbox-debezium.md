@@ -74,8 +74,15 @@ Karar uygulandı. Eklenen ayrıntılar:
   burada `kervan.orders.events` olarak sabitlendi ki iki taşıyıcı aynı konuya yazsın
   ve geçiş tüketicileri etkilemesin.
 
+- **İlk açılışta geçmiş yeniden yayınlanmaz.** `snapshot.mode` varsayılanı `initial`;
+  o hâlde konektör ilk başladığında outbox tablosunu baştan tarar ve yayınlanmış eski
+  kayıtları da olay olarak gönderirdi. Polling'den CDC'ye geçen bir sistemde bu, sipariş
+  geçmişinin tamamının yeniden yayınlanması demekti. `no_data` ile konektör mevcut WAL
+  konumundan başlar.
+
 - **Retention hâlâ açık.** Debezium satırı okuduktan sonra kimse `published_at`
-  damgalamaz; tablo büyümeye devam eder. Temizlik işi henüz yazılmadı.
+  damgalamaz; tablo büyümeye devam eder. Temizlik işi henüz yazılmadı. Ölçüt
+  "yayınlandı mı" olamaz — o bilgi artık tabloda yok — yaş olmalıdır.
 
 - **Doğrulama:** `OutboxCdcIntegrationTest`, depodaki gerçek konektör ayar dosyasını
   yükler, Postgres + Kafka + Kafka Connect container'larını ayağa kaldırır ve yalnızca

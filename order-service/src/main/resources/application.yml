@@ -47,6 +47,10 @@ kervan:
     auto-register: ${KERVAN_SCHEMA_AUTO_REGISTER:true}
 
   outbox:
+    # Debezium devredeyken konu adı konektör ayarında da yazılı
+    # (infra/docker/debezium/order-outbox-connector.json → route.topic.replacement).
+    # İkisi ayrı sistemde olduğu için ortak bir sabitte tutulamıyor; biri
+    # değişirse diğeri de değişmeli.
     topic: kervan.orders.events
     publisher:
       # Uygulama içi yayıncı. Debezium (CDC) devreye alındığında false yapılır;

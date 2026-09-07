@@ -14,10 +14,13 @@
     "plugin.name": "pgoutput",
     "slot.name": "kervan_order_outbox",
     "publication.name": "kervan_order_outbox_pub",
+    "publication.autocreate.mode": "filtered",
 
     "table.include.list": "public.outbox_messages",
     "binary.handling.mode": "bytes",
     "tombstones.on.delete": "false",
+    "snapshot.mode": "no_data",
+    "heartbeat.interval.ms": "10000",
 
     "transforms": "outbox",
     "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
