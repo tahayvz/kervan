@@ -31,8 +31,12 @@ Varsayılan `replica` seviyesinde günlük satırın içeriğini taşımaz, yaln
 blok değişikliğini; Debezium bu günlükten satırı çözemez.
 
 ```bash
-docker compose -f infra/docker/docker-compose.yml up -d postgres kafka schema-registry connect
+docker compose -f infra/docker/docker-compose.yml up -d \
+  postgres mongodb mongo-init kafka schema-registry connect
 ```
+
+`mongo-init` atlanamaz: Mongo replica set modunda ama başlatılmamış durumda kalırsa
+**her yazma reddedilir** ve hata mesajı sebebi söylemez. Bir kez çalışır ve çıkar.
 
 **Uygulama içi yayıncıyı kapat.** Bu adım atlanırsa her olay iki kez gider: biri
 Debezium'dan, biri `OutboxPublisher`'dan. Varsayılan açıktır.
@@ -147,10 +151,17 @@ PUBLICATION ... FOR ALL TABLES` çalıştırır: superuser ister ve `orders`,
 `order_lines` değişikliklerini de WAL'dan çözer — hepsi `table.include.list` ile
 sonradan elenir, yani boşa iş. `filtered` yalnızca izin listesindeki tabloyu yayınlar.
 
-**`heartbeat.interval.ms` = `10000`.** Outbox sessizken ama veritabanının geri kalanı
-meşgulken slot'un onaylanan konumu ilerlemez ve WAL birikir. Heartbeat, konektörün
-okuduğu konumu düzenli olarak bildirmesini sağlar. Veritabanı **tümüyle** sessizse
-bu da yetmez; o durumda `heartbeat.action.query` ile küçük bir yazma yaptırmak gerekir.
+**`heartbeat.interval.ms` = `10000`.** Her iki konektörde de var, aynı sınıf sorunu
+çözüyor: kaynak sessizken konektörün kaydettiği konum ilerlemez.
+
+- Postgres'te sonuç WAL birikmesidir: outbox sessizken ama veritabanının geri kalanı
+  meşgulken slot'un onaylanan konumu yerinde sayar. Veritabanı **tümüyle** sessizse
+  heartbeat de yetmez; o durumda `heartbeat.action.query` ile küçük bir yazma
+  yaptırmak gerekir.
+- MongoDB'de sonuç daha sert: koleksiyon sessizken kaydedilen resume token eskir.
+  Oplog dönüp token'ın gösterdiği nokta düşerse konektör kaldığı yerden devam
+  **edemez**. `snapshot.mode=no_data` olduğu için yeniden başlarken aradaki
+  değişiklikleri de getiremez — o değişiklikler kaybolur.
 
 **`binary.handling.mode` = `bytes`.** Varsayılanı `bytes`tir ama açıkça yazıldı:
 `base64` olsaydı gövde bir kez daha kodlanır ve tüketici Avro yerine metin görürdü.
@@ -252,7 +263,8 @@ kervan:
       enabled: true
       retention: 7d          # bu yaştan eskiler silinir
       interval-ms: 3600000   # saatte bir
-      batch-size: 1000       # tek turda azami satır
+      batch-size: 1000       # tek partide azami satır
+      max-batches-per-run: 100   # turda azami parti (100 x 1000 = 100.000 satır)
 ```
 
 **Saklama penceresi neden geniş?** Debezium modunda ölçüt yaş olduğu için, Debezium
@@ -263,4 +275,10 @@ durup durmadığı ayrıca izlenmelidir — replication slot'un gecikmesi bunu s
 
 **Neden parti parti?** Sınırsız tek bir `DELETE`, tablo büyümüşse milyonlarca satırı
 tek transaction'da siler; tablo o süre boyunca kilitli kalır ve sipariş yazan istekler
-bekler. Bir turda bitmeyen iş bir sonraki turda devam eder.
+bekler. Her parti kendi transaction'ında çalışır.
+
+**Neden turda tek parti değil?** Öyle olsaydı temizlik hızı `batch-size ÷ interval`de
+sabitlenirdi — yukarıdaki değerlerle saatte 1000 satır. Sipariş hızı bunu geçtiği anda
+tablo büyümeye devam eder ve hiçbir şey uyarmaz; log "sildim" der. Bu yüzden bir tur,
+silinecek kayıt kalmayana kadar sürer. `max-batches-per-run` üst sınırdır ve ona
+takılmak "temizlik yetişemiyor" demektir — uyarı olarak loglanır.

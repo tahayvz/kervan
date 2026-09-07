@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableScheduling   // OutboxPublisher periyodik çalışır
+@EnableScheduling   // OutboxPublisher ve OutboxCleaner periyodik çalışır
 public class OrderServiceApplication {
 
     public static void main(String[] args) {

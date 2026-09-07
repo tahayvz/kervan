@@ -72,9 +72,13 @@ kervan:
       retention: 7d
       # Saatte bir; temizlik acele bir iş değil.
       interval-ms: 3600000
-      # Tek turda silinecek azami satır. Sınırsız bir DELETE tabloyu uzun süre
+      # Tek PARTİDE silinecek azami satır. Sınırsız bir DELETE tabloyu uzun süre
       # kilitler ve sipariş yazan istekler bekler.
       batch-size: 1000
+      # Bir tur, silinecek kayıt kalmayana kadar parti parti devam eder; bu sayı
+      # üst sınırdır. Sınıra takılmak "temizlik yetişemiyor" demektir ve uyarı
+      # olarak loglanır. 100 x 1000 = turda 100.000 satır.
+      max-batches-per-run: 100
 
 server:
   port: 8082

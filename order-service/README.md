@@ -130,8 +130,14 @@ Bunun bedeli açık: Debezium saklama penceresinden uzun süre durursa henüz ok
 satırlar silinir. Pencere bu yüzden geniş tutuldu ve Debezium'un durup durmadığı
 replication slot gecikmesinden izlenir.
 
-Silme parti parti yapılır. Sınırsız tek bir `DELETE`, tablo büyümüşse milyonlarca
-satırı tek transaction'da siler ve sipariş yazan istekler o süre boyunca bekler.
+Silme parti parti yapılır ve **her parti kendi transaction'ında** çalışır. Sınırsız tek
+bir `DELETE`, tablo büyümüşse milyonlarca satırı tek transaction'da siler ve sipariş
+yazan istekler o süre boyunca bekler.
+
+Bir tur, silinecek kayıt kalmayana kadar sürer — turda tek parti silinseydi temizlik
+hızı parti boyutu ÷ tur aralığında sabitlenirdi ve sipariş hızı bunu geçtiği anda tablo
+büyümeye devam ederdi. Hiçbir şey de uyarmazdı; log "sildim" derdi. Turun bir üst sınırı
+var; sınıra takılmak "temizlik yetişemiyor" demektir ve uyarı olarak loglanır.
 
 ## Katmanlar
 
@@ -184,7 +190,7 @@ Servis `http://localhost:8082`, OpenAPI arayüzü `/swagger-ui.html`.
 mvn -pl order-service test
 ```
 
-104 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
+107 test: domain birim testleri (para aritmetiği, durum makinesinin tüm geçiş matrisi,
 sipariş toplamı), use-case testleri (mock port'larla), yayıncı testleri (anahtarlama,
 başarısız gönderimde işaretlememe, deneme sayacı, turun durması), Avro serileştirici
 testleri (kablo biçimi, şemanın hangi ad altında kaydedildiği, ölçeği bozuk tutarın

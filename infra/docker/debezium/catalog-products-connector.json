@@ -12,6 +12,7 @@
 
     "capture.mode": "change_streams_update_full",
     "snapshot.mode": "no_data",
+    "heartbeat.interval.ms": "10000",
 
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
     "key.converter.schemas.enable": "false",

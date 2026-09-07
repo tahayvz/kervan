@@ -1,5 +1,7 @@
 package com.kervan.catalog.infrastructure.cdc;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -61,6 +63,8 @@ class CatalogCdcIntegrationTest {
 
     private static final Path CONNECTOR_CONFIG =
             Path.of("../infra/docker/debezium/catalog-products-connector.json");
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final Network NETWORK = Network.newNetwork();
 
@@ -236,10 +240,11 @@ class CatalogCdcIntegrationTest {
                             .GET().build(),
                     HttpResponse.BodyHandlers.ofString());
 
-            // Görev listesi boşken konektör henüz görev başlatmamıştır; RUNNING
-            // yalnızca gerçekten çalışan bir görev varken görünür.
-            return status.body().contains("\"tasks\"")
-                    && status.body().split("\"tasks\"")[1].contains("RUNNING");
+            // JSON düzgün ayrıştırılıyor: metin bölerek aramak, alanların sırasına
+            // bel bağlamak olurdu ve o sıra bir garanti değil.
+            JsonNode tasks = JSON.readTree(status.body()).path("tasks");
+            return tasks.isArray() && !tasks.isEmpty()
+                    && "RUNNING".equals(tasks.get(0).path("state").asText());
         });
     }
 

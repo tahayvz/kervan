@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -39,9 +38,19 @@ import java.time.Instant;
  * geniş (7 gün) ve Debezium'un durup durmadığı ayrıca izlenmelidir — replication
  * slot'un gecikmesi bunu söyler ({@code infra/docker/debezium/README.md}).
  *
- * <p>Temizlik parça parça yapılır. Sınırsız tek bir {@code DELETE}, tablo büyümüşse
- * milyonlarca satırı tek transaction'da siler ve sipariş yazan istekler o süre boyunca
- * bekler. Bir turda bitmeyen iş bir sonraki turda devam eder.
+ * <h2>Neden parça parça, ama tek parti değil</h2>
+ * Sınırsız tek bir {@code DELETE}, tablo büyümüşse milyonlarca satırı tek
+ * transaction'da siler ve sipariş yazan istekler o süre boyunca bekler. Bu yüzden
+ * silme partilere bölünür ve <b>her parti kendi transaction'ında</b> çalışır.
+ *
+ * <p>Ama turda tek parti silmek de yetmez. Parti 1000, tur aralığı bir saat olsaydı
+ * temizlik hızı saatte 1000 satırda kalırdı; sipariş hızı bunu geçtiği anda tablo
+ * büyümeye devam eder ve hiçbir şey uyarmaz — log "sildim" der, iş çalışıyor görünür.
+ * Bu yüzden bir tur, silinecek bir şey kalmayana kadar sürer.
+ *
+ * <p>Turun bir üst sınırı var ({@code max-batches-per-run}): sonsuza kadar süren bir
+ * temizlik de istenmez. Sınıra takılmak "temizlik yetişemiyor" demektir ve
+ * <b>uyarı</b> olarak loglanır; görülmesi gereken tek sinyal odur.
  */
 @Component
 @ConditionalOnProperty(name = "kervan.outbox.cleanup.enabled", havingValue = "true", matchIfMissing = true)
@@ -53,32 +62,62 @@ class OutboxCleaner {
     private final Clock clock;
     private final Duration retention;
     private final int batchSize;
+    private final int maxBatchesPerRun;
     private final boolean publisherEnabled;
 
     OutboxCleaner(OutboxRepository outboxRepository,
                   Clock clock,
                   @Value("${kervan.outbox.cleanup.retention}") Duration retention,
                   @Value("${kervan.outbox.cleanup.batch-size}") int batchSize,
+                  @Value("${kervan.outbox.cleanup.max-batches-per-run}") int maxBatchesPerRun,
                   @Value("${kervan.outbox.publisher.enabled:true}") boolean publisherEnabled) {
         this.outboxRepository = outboxRepository;
         this.clock = clock;
         this.retention = retention;
         this.batchSize = batchSize;
+        this.maxBatchesPerRun = maxBatchesPerRun;
         this.publisherEnabled = publisherEnabled;
     }
 
+    /**
+     * Burada bilerek {@code @Transactional} <b>yok</b>. Olsaydı turdaki bütün partiler
+     * tek transaction'da birleşir ve partilere bölmenin tüm anlamı kaybolurdu. Her
+     * partinin transaction'ını adaptör açar.
+     */
     @Scheduled(fixedDelayString = "${kervan.outbox.cleanup.interval-ms}")
-    @Transactional
     public void deleteExpired() {
         Instant cutoff = clock.instant().minus(retention);
+        int total = 0;
 
-        int deleted = publisherEnabled
+        for (int batch = 0; batch < maxBatchesPerRun; batch++) {
+            int deleted = deleteBatch(cutoff);
+            total += deleted;
+
+            // Parti dolmadıysa silinecek kayıt kalmamıştır; bir sonraki sorgu
+            // boşuna çalışırdı.
+            if (deleted < batchSize) {
+                logDeleted(total, cutoff);
+                return;
+            }
+        }
+
+        logDeleted(total, cutoff);
+        log.warn("Outbox temizliği tur sınırına ({} parti) takıldı: silinecek kayıt "
+                        + "kaldı. Temizlik, kayıtların birikme hızına yetişemiyor olabilir; "
+                        + "parti boyutunu ya da tur sıklığını artırmayı değerlendirin.",
+                maxBatchesPerRun);
+    }
+
+    private int deleteBatch(Instant cutoff) {
+        return publisherEnabled
                 ? outboxRepository.deletePublishedBefore(cutoff, batchSize)
                 : outboxRepository.deleteAllBefore(cutoff, batchSize);
+    }
 
-        if (deleted > 0) {
+    private void logDeleted(int total, Instant cutoff) {
+        if (total > 0) {
             log.info("Outbox temizliği: {} kayıt silindi (sınır: {}, ölçüt: {})",
-                    deleted, cutoff, publisherEnabled ? "yayınlanmış" : "yaş");
+                    total, cutoff, publisherEnabled ? "yayınlanmış" : "yaş");
         }
     }
 }
