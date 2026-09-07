@@ -1,0 +1,39 @@
+server:
+  # 8080 Keycloak, 8081 catalog, 8082 order, 8083 Connect, 8084 inventory,
+  # 8085 Schema Registry, 8086 payment.
+  port: 8087
+
+spring:
+  application:
+    name: search-service
+
+  elasticsearch:
+    uris: ${SPRING_ELASTICSEARCH_URIS:http://localhost:9200}
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: search-service
+      # İndeks boşken baştan okur: akış yeniden oynatılarak indeks kurulabilir.
+      # CQRS okuma modelinin kurtarma yolu budur — veri katalogta, indeks türev.
+      auto-offset-reset: earliest
+      # Katalog akışı Avro değil düz JSON: Debezium'un ham değişiklik kaydı
+      # (ADR-0004). Sözleşmesiz olduğu için metin olarak alınır ve tek bir yerde
+      # çözülür.
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+kervan:
+  search:
+    # Debezium'un MongoDB change streams'ten ürettiği akış.
+    catalog-topic: kervan.catalog.products
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

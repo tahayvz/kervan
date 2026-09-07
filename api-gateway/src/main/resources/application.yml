@@ -15,6 +15,13 @@ spring:
           predicates:
             - Path=/api/v1/products/**
 
+        # Arama: urun aramasi da katalog listeleme gibi herkese acik. Kisisel veri
+        # donmez ve yazma ucu yoktur.
+        - id: search
+          uri: ${KERVAN_SEARCH_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/search/**
+
         # Siparis: kimlik dogrulamasi zorunlu. Rol ve sahiplik denetimi
         # order-service'te yapilir, burada degil (ADR-0007).
         - id: orders

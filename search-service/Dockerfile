@@ -1,7 +1,7 @@
-# Kervan Payment Service — çok aşamalı (multi-stage) imaj.
+# Kervan Search Service — çok aşamalı (multi-stage) imaj.
 #
 # ÖNEMLİ: Bu Dockerfile repo KÖKÜNDEN build edilir (parent POM'a erişmek için):
-#   docker build -f payment-service/Dockerfile -t kervan/payment-service:local .
+#   docker build -f search-service/Dockerfile -t kervan/search-service:local .
 
 # ---------- 1) Derleme aşaması ----------
 FROM maven:3.9-eclipse-temurin-21 AS build
@@ -18,12 +18,13 @@ COPY inventory-service/pom.xml inventory-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY search-service/pom.xml search-service/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
-RUN mvn -B -pl payment-service -am dependency:go-offline -DskipTests || true
+RUN mvn -B -pl search-service -am dependency:go-offline -DskipTests || true
 
-# event-contracts bu servisin bagimliligi; -am onu da derler, kaynagi gerekli.
-COPY event-contracts/src event-contracts/src
-COPY payment-service/src payment-service/src
-RUN mvn -B -pl payment-service -am -DskipTests clean package
+# Bu servis event-contracts'a bagimli DEGIL: tukettigi akis Debezium'un ham
+# degisiklik kaydidir, surumlu bir Avro sozlesmesi degil (ADR-0004). O yuzden
+# yalnizca kendi kaynagi kopyalanir.
+COPY search-service/src search-service/src
+RUN mvn -B -pl search-service -am -DskipTests clean package
 
 # ---------- 2) Çalışma aşaması ----------
 FROM eclipse-temurin:21-jre-jammy AS runtime
@@ -31,8 +32,8 @@ WORKDIR /app
 
 RUN groupadd -r kervan && useradd -r -g kervan kervan
 
-COPY --from=build /workspace/payment-service/target/payment-service-*.jar app.jar
+COPY --from=build /workspace/search-service/target/search-service-*.jar app.jar
 USER kervan
 
-EXPOSE 8086
+EXPOSE 8087
 ENTRYPOINT ["java", "-jar", "app.jar"]

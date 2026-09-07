@@ -21,6 +21,7 @@ COPY catalog-service/pom.xml catalog-service/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
 COPY inventory-service/pom.xml inventory-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
+COPY search-service/pom.xml search-service/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
 RUN mvn -B -pl catalog-service -am dependency:go-offline -DskipTests || true
 

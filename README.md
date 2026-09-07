@@ -76,7 +76,8 @@ marked done unless its code and tests are in this repository.
 | 4b | **Inventory Service — stock reservation, idempotent consumer, compensation** | ✅ Done |
 | 4c | **Payment Service — capture, refund, simulated provider behind a port** | ✅ Done |
 | 4d | **Saga orchestrator — state machine, compensation, idempotent steps** | ✅ Done |
-| 5 | Elasticsearch (search) + Redis (cache, locking) | Planned |
+| 5a | **Search Service — Elasticsearch read model fed by catalogue CDC** | ✅ Done |
+| 5b | Redis — cache, distributed lock, rate limiting | Planned |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
@@ -327,6 +328,45 @@ Service documentation: [payment-service/README.md](payment-service/README.md)
 
 ---
 
+### Search Service
+
+An order's catalogue is queried far more often than it is written, and the questions are
+different: "Nike, electronics, 1000–2000 TL, 'headphones' in the name", with counts
+beside each filter. MongoDB is shaped for writing that catalogue; asking it to do all of
+that as well means one workload slowing the other.
+
+So search gets its own read model. This service writes nothing — it listens to the
+catalogue's change stream and keeps an Elasticsearch copy shaped for querying. The
+catalogue service does not know search exists; adding another read model later would not
+require touching it.
+
+The index is derived data. If it is lost, nothing is lost: the consumer reads from the
+beginning of the stream and rebuilds it. That is the recovery plan, not a backup.
+
+**Field types are declared rather than inferred.** Elasticsearch will happily create an
+index on first write and guess that every string is analysed text — which silently breaks
+two things at once: facet counts stop working, and filtering on "New Balance" starts
+matching anything containing "New". The annotations only take effect if *we* create the
+index, so it is created before the first document.
+
+Redelivery is handled by the index itself rather than by bookkeeping. Each document is
+written with the source document's own version as an external version, so a repeated
+event changes nothing and a late one cannot overwrite newer data.
+
+The cost is stated rather than hidden: search is **eventually consistent** with the
+catalogue, and the stream it consumes is a raw change record with no versioned contract
+— rename a field in the catalogue and this service breaks. Both were accepted knowingly
+(ADR-0010), and the translation lives in one class so the breakage has one place to
+happen.
+
+There is a test for the whole chain — Mongo, Debezium, Kafka, index — because the other
+tests hand-write the change event, which only proves my assumption about its shape. That
+shape has no contract, so the only way to know is to read what Debezium actually emits.
+
+Service documentation: [search-service/README.md](search-service/README.md)
+
+---
+
 ### The saga
 
 An order spans three services, and a distributed transaction across them does not scale.
@@ -408,7 +448,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Schema management | Confluent Schema Registry + Avro | ✅ |
 | Change data capture | Debezium (PostgreSQL WAL + MongoDB change streams) | ✅ |
 | Saga orchestration | own implementation | ✅ |
-| Search | Elasticsearch | planned |
+| Search | Elasticsearch | ✅ |
 | Cache / locking / rate limiting | Redis | planned |
 | API gateway | Spring Cloud Gateway | ✅ |
 | Identity | Keycloak (OAuth2 / OIDC / JWT) | ✅ |

@@ -35,6 +35,7 @@
       Faz 3: event-contracts (servisler arası Avro olay şemaları) — ÖNCE derlenmeli,
              çünkü diğer modüller ona bağımlı.
       Faz 4: inventory-service (Saga'nın stok adımı), payment-service (ödeme adımı).
+      Faz 5: search-service (Elasticsearch okuma modeli).
     -->
     <modules>
         <module>event-contracts</module>
@@ -42,6 +43,7 @@
         <module>order-service</module>
         <module>inventory-service</module>
         <module>payment-service</module>
+        <module>search-service</module>
         <module>api-gateway</module>
     </modules>
 

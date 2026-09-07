@@ -132,9 +132,10 @@ yapmak işkencedir. Ayrıca sık okunan veri her seferinde DB'ye gitmemeli.
 
 **Ne inşa edilecek:**
 - `search-service`: Kafka'daki katalog event'lerini dinleyip **Elasticsearch**'e
-  indeksler (CQRS okuma modeli)
-- Faceted search, filtreleme, sayfalama
+  indeksler (CQRS okuma modeli) — ✅ yapıldı (ADR-0010)
+- Faceted search, filtreleme, sayfalama — ✅ yapıldı
 - **Redis**: sık okunan katalog verisi için cache, dağıtık **kilit**, **rate-limit**
+  — sırada
 
 **Kazanım:** Arama için CQRS okuma modeli kurulur; Kafka'dan beslenen Elasticsearch
 indeksiyle faceted search, Redis ile cache ve dağıtık kilit sağlanır.

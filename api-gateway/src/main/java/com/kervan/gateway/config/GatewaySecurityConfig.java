@@ -53,6 +53,10 @@ class GatewaySecurityConfig {
                         // görmek için hesap gerekmez. Servisin bugünkü davranışı da
                         // budur; ağ geçidi onu değiştirmemeli.
                         .pathMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+                        // Arama da aynı sebeple açık: vitrini aramak, vitrini
+                        // görmekten farklı bir yetki gerektirmez. Servisin yalnızca
+                        // okuma ucu var ve kişisel veri dönmüyor.
+                        .pathMatchers(HttpMethod.GET, "/api/v1/search/**").permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
 

@@ -22,6 +22,7 @@ COPY api-gateway/pom.xml api-gateway/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
 COPY inventory-service/pom.xml inventory-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
+COPY search-service/pom.xml search-service/pom.xml
 RUN mvn -B -pl api-gateway -am dependency:go-offline -DskipTests || true
 
 # Sonra kaynağı kopyala ve derle (testler imaj build'inde çalışmaz; onlar CI'da — Faz 8)

@@ -10,7 +10,7 @@
 #   Faz 3 → Kafka (eklendi) + Schema Registry (eklendi) + Debezium/Kafka Connect
 #           (eklendi; Postgres WAL). Mongo change streams için Mongo replica set
 #           moduna alınacak — sonraki adım.
-#   Faz 5 → Elasticsearch + Redis
+#   Faz 5 → Elasticsearch (eklendi) + Redis
 #   Faz 6 → Prometheus + Grafana + Jaeger + Loki
 #
 # Çalıştırma:  docker compose -f infra/docker/docker-compose.yml up -d
@@ -204,6 +204,32 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Arama okuma modelinin deposu — ADR-0010. Katalog degisiklikleri Debezium
+  # uzerinden buraya yansir; veri burada UREtilmez, yansitilir.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: kervan-elasticsearch
+    # Imajin ARM surumundeki Java calisma zamani bazi Mac'lerde ilk yerel cagrida
+    # cokuyor (SIGILL, System.registerNatives) — Debezium imajiyla ayni ariza.
+    # amd64 surumu her yerde calisir: Linux'ta yerel, Apple Silicon'da emulasyonla.
+    platform: linux/amd64
+    environment:
+      # Tek dugum: kume kurmuyoruz, arama indeksi turev bir veri.
+      discovery.type: single-node
+      # Lokal gelistirme: kimlik dogrulama kapali. Uretimde asla boyle kullanilmaz.
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   # Kimlik saglayici — ADR-0001. order-service token uretmez, yalnizca dogrular.
   # dev modunda calisir: kalici depo yok, realm her acilista dosyadan yuklenir.
   keycloak:
@@ -248,3 +274,4 @@ volumes:
   postgres-data:
   mongo-data:
   kafka-data:
+  elasticsearch-data:

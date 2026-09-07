@@ -31,17 +31,20 @@ class GatewayTest {
 
     private static final MockWebServer CATALOG = new MockWebServer();
     private static final MockWebServer ORDERS = new MockWebServer();
+    private static final MockWebServer SEARCH = new MockWebServer();
 
     @BeforeAll
     static void startDownstream() throws IOException {
         CATALOG.start();
         ORDERS.start();
+        SEARCH.start();
     }
 
     @AfterAll
     static void stopDownstream() throws IOException {
         CATALOG.shutdown();
         ORDERS.shutdown();
+        SEARCH.shutdown();
     }
 
     /**
@@ -60,6 +63,7 @@ class GatewayTest {
     static void downstreamAddresses(DynamicPropertyRegistry registry) {
         registry.add("KERVAN_CATALOG_URL", () -> "http://localhost:" + CATALOG.getPort());
         registry.add("KERVAN_ORDER_URL", () -> "http://localhost:" + ORDERS.getPort());
+        registry.add("KERVAN_SEARCH_URL", () -> "http://localhost:" + SEARCH.getPort());
     }
 
     @Autowired
@@ -71,6 +75,7 @@ class GatewayTest {
         // iddialari bir onceki testin istegini okur ve yaniltir.
         while (CATALOG.takeRequest(1, TimeUnit.MILLISECONDS) != null) { /* bosalt */ }
         while (ORDERS.takeRequest(1, TimeUnit.MILLISECONDS) != null) { /* bosalt */ }
+        while (SEARCH.takeRequest(1, TimeUnit.MILLISECONDS) != null) { /* bosalt */ }
     }
 
     @Nested
@@ -88,6 +93,23 @@ class GatewayTest {
             assertThat(received).isNotNull();
             assertThat(received.getPath()).isEqualTo("/api/v1/products/42");
             assertThat(ORDERS.getRequestCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("Arama isteği arama servisine gider")
+        void searchGoesToSearchService() throws InterruptedException {
+            SEARCH.enqueue(new MockResponse().setBody("{}").setHeader("Content-Type", "application/json"));
+
+            // Kimlik doğrulaması yok: arama katalog listeleme gibi açık.
+            client.get().uri("/api/v1/search/products?q=kulaklik")
+                    .exchange().expectStatus().isOk();
+
+            RecordedRequest received = SEARCH.takeRequest(2, TimeUnit.SECONDS);
+            assertThat(received).isNotNull();
+            assertThat(received.getPath()).startsWith("/api/v1/search/products");
+            // Sayaç değil kuyruk kontrol ediliyor: getRequestCount() sınıfın ömrü
+            // boyunca birikir ve önceki testlerin isteklerini de sayar.
+            assertThat(CATALOG.takeRequest(200, TimeUnit.MILLISECONDS)).isNull();
         }
 
         @Test
