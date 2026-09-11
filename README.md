@@ -77,7 +77,7 @@ marked done unless its code and tests are in this repository.
 | 4c | **Payment Service — capture, refund, simulated provider behind a port** | ✅ Done |
 | 4d | **Saga orchestrator — state machine, compensation, idempotent steps** | ✅ Done |
 | 5a | **Search Service — Elasticsearch read model fed by catalogue CDC** | ✅ Done |
-| 5b | Redis — cache, distributed lock, rate limiting | Planned |
+| 5b | **Redis — cache and rate limiting** (no distributed lock; ADR-0011 says why) | ✅ Done |
 | 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
@@ -367,6 +367,38 @@ Service documentation: [search-service/README.md](search-service/README.md)
 
 ---
 
+### Redis: cache and rate limiting — and no lock
+
+Catalogue reads repeat, so product lookups go through a Redis cache. It is a decorator
+around the repository rather than an annotation, so the application layer never learns
+the cache exists. Writes **evict** rather than update — what was saved and what the
+database returns are not always identical, and deleting guarantees the next read is
+correct. Search is deliberately not cached: the query space is too wide to hit, and
+there is no way to know which cached results a write invalidates.
+
+The open endpoints needed protection, so the gateway rate-limits with a token bucket
+whose counters live in Redis — in memory, each replica would enforce its own limit and
+the real limit would multiply by the replica count. Authenticated requests are keyed by
+user, anonymous ones by IP: IP alone would make one office share a quota, user alone
+would leave the open endpoints unprotected.
+
+Adding Redis immediately broke something worth keeping: the gateway's health endpoint
+started reporting 503, because Boot includes Redis in health by default. In production
+that means a brief Redis blip takes the entire front door out of the load balancer — the
+rate limiter's datastore killing the thing it protects. Redis is now excluded from
+gateway health, and when it is unreachable requests pass through unthrottled. Failing
+open is a real risk, but a temporary one; failing closed is a certain outage. Both
+behaviours have tests.
+
+**There is no distributed lock, and that is a decision rather than an omission.** Every
+place that needed mutual exclusion already has it from the database: `FOR UPDATE` in SKU
+order for stock, a locked saga row per order, unique constraints for idempotency,
+`SKIP LOCKED` for the outbox. Those guarantees are in the same transaction as the data.
+A Redis lock would create a second answer to "who holds it", with no rule for which
+answer wins. ADR-0011 records this, and the order to reach for if one is ever needed.
+
+---
+
 ### The saga
 
 An order spans three services, and a distributed transaction across them does not scale.
@@ -449,7 +481,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Change data capture | Debezium (PostgreSQL WAL + MongoDB change streams) | ✅ |
 | Saga orchestration | own implementation | ✅ |
 | Search | Elasticsearch | ✅ |
-| Cache / locking / rate limiting | Redis | planned |
+| Cache / rate limiting | Redis | ✅ |
 | API gateway | Spring Cloud Gateway | ✅ |
 | Identity | Keycloak (OAuth2 / OIDC / JWT) | ✅ |
 | Resilience | Resilience4j | planned |

@@ -64,6 +64,28 @@ oplog tek düğümlü kurulumda tutulmaz. Küme kurmak için değil, yalnızca b
 Bu değişiklik servisin bağlantı adresini etkilemedi; sebebi `application.yml` içinde
 yazılı.
 
+## Önbellek
+
+Ürün okumaları Redis üzerinden önbelleklenir ([ADR-0011](../docs/adr/0011-redis-cache-and-rate-limit.md)).
+
+Üç karar:
+
+**Sarmalayıcı, anotasyon değil.** Önbellek `ProductRepository` portunu uygulayıp gerçek
+uygulamayı sarar. Uygulama katmanı önbelleğin varlığını bilmez; yarın kaldırılsa orada
+tek satır değişmez.
+
+**Yazmada silinir, güncellenmez.** Güncellemek daha hızlı görünür ama yanlış olabilir:
+kaydedilen nesne ile veritabanının döndürdüğü aynı olmayabilir (sürüm alanı, sunucu
+tarafı varsayılanlar). Silmek, bir sonraki okumanın doğru veriyi getirmesini garanti
+eder — önbellek doğruluk kaynağı değil, kopyasıdır.
+
+**Arama önbelleklenmez.** Sorgu uzayı çok geniş (metin × süzgeç × sayfa) ve isabet oranı
+düşük olurdu; ayrıca her yazmada hangi sorgu sonuçlarının bayatladığını bilmek mümkün
+değil. Aramanın hızlı olması gerekiyorsa yeri burası değil, `search-service`.
+
+**Redis erişilemezse istek düşmez**, veritabanına gidilir. Önbellek bir hızlandırmadır;
+onun arızası katalogun arızası olmamalı. Bağlantı zaman aşımları bu yüzden kısa tutuldu.
+
 ## Test
 ```bash
 # Unit + Testcontainers entegrasyon testleri (Docker gerekir)

@@ -10,7 +10,7 @@
 #   Faz 3 → Kafka (eklendi) + Schema Registry (eklendi) + Debezium/Kafka Connect
 #           (eklendi; Postgres WAL). Mongo change streams için Mongo replica set
 #           moduna alınacak — sonraki adım.
-#   Faz 5 → Elasticsearch (eklendi) + Redis
+#   Faz 5 → Elasticsearch (eklendi) + Redis (eklendi)
 #   Faz 6 → Prometheus + Grafana + Jaeger + Loki
 #
 # Çalıştırma:  docker compose -f infra/docker/docker-compose.yml up -d
@@ -230,6 +230,27 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Onbellek ve hiz sinirlama sayaclari — ADR-0011.
+  #
+  # Burada duran her sey KAYBOLABILIR: onbellek veritabanindaki verinin kopyasi,
+  # sayaclar ise kisa omurlu. Bu yuzden kalici disk baglanmiyor; Redis yeniden
+  # baslarsa onbellek bos doner ve sayaclar sifirlanir, ikisi de kabul edilebilir.
+  redis:
+    image: redis:7-alpine
+    container_name: kervan-redis
+    ports:
+      - "6379:6379"
+    # maxmemory + allkeys-lru: hafiza dolunca en az kullanilan anahtarlar atilir.
+    # Sinirsiz birakilsaydi Redis butun RAM'i yiyip oldurulurdu; onbellek icin
+    # "eskiyi at" dogru davranis.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   # Kimlik saglayici — ADR-0001. order-service token uretmez, yalnizca dogrular.
   # dev modunda calisir: kalici depo yok, realm her acilista dosyadan yuklenir.
   keycloak:
@@ -268,6 +289,8 @@ services:
       KERVAN_CATALOG_URL: http://catalog-service:8081
       KERVAN_ORDER_URL: http://order-service:8082
       KERVAN_JWKS_URI: http://keycloak:8080/realms/kervan/protocol/openid-connect/certs
+      KERVAN_SEARCH_URL: http://search-service:8087
+      SPRING_DATA_REDIS_URL: redis://redis:6379
     restart: unless-stopped
 
 volumes:

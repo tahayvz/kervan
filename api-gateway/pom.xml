@@ -31,6 +31,16 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!--
+          Hız sınırlama sayaçları Redis'te tutulur (ADR-0011): ağ geçidi birden fazla
+          kopya hâlinde çalışır ve sayaç bellekte olsaydı her kopya kendi sınırını
+          uygularardı — üç kopyada sınır üçe katlanırdı.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -52,6 +62,17 @@
             <scope>test</scope>
         </dependency>
         <!-- Testlerde downstream servislerin yerine gecen sahte HTTP sunucusu -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>mockwebserver</artifactId>

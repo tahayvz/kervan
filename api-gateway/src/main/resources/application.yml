@@ -6,8 +6,28 @@ spring:
   application:
     name: api-gateway
 
+  data:
+    redis:
+      # Hız sınırlama sayaçları burada tutulur; kopyalar arasında paylaşılmalı.
+      url: ${SPRING_DATA_REDIS_URL:redis://localhost:6379}
+
   cloud:
     gateway:
+      # Bütün rotalara uygulanan sınır. Rota başına farklı sınır gerekseydi filtre
+      # rotanın altına yazılırdı; bugün buna ihtiyaç yok ve tek yerde durması
+      # hangi sınırın geçerli olduğunu okunur kılıyor.
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            # Jeton kovası: saniyede `replenishRate` jeton dolar, kova en fazla
+            # `burstCapacity` tutar. Ani bir yığılma kovadan karşılanır, sürekli
+            # yüksek hız ise dolum hızına iner.
+            redis-rate-limiter.replenishRate: ${KERVAN_RATE_LIMIT_PER_SECOND:20}
+            # Kısa süreli patlamalara izin: bir sayfanın aynı anda attığı birkaç
+            # istek sınıra takılmamalı.
+            redis-rate-limiter.burstCapacity: ${KERVAN_RATE_LIMIT_BURST:40}
+            key-resolver: "#{@rateLimitKeyResolver}"
+
       routes:
         # Katalog: urun okuma. GET'ler herkese acik (GatewaySecurityConfig).
         - id: catalog
@@ -39,6 +59,19 @@ spring:
           jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
 
 management:
+  health:
+    # Redis'in durumu ag gecidinin sagligini BELIRLEMEZ.
+    #
+    # Bu acik bir karar: Redis yalnizca hiz sinirlama sayaclarini tutuyor. Saglik
+    # ucuna dahil edilseydi, Redis'teki kisa bir kesinti ag gecidini DOWN gosterir,
+    # Kubernetes trafigi kesers ve BUTUN API erisilemez olurdu. Yani bir korumanin
+    # deposundaki ariza, korudugu seyi yok ederdi.
+    #
+    # Dogru davranis: hiz siniri calismasa da kapi acik kalir (bkz. RateLimitTest).
+    # Redis ayrica izlenir; onun arizasi kendi alarmini uretir.
+    redis:
+      enabled: false
+
   endpoints:
     web:
       exposure:

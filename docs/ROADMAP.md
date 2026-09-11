@@ -134,8 +134,12 @@ yapmak işkencedir. Ayrıca sık okunan veri her seferinde DB'ye gitmemeli.
 - `search-service`: Kafka'daki katalog event'lerini dinleyip **Elasticsearch**'e
   indeksler (CQRS okuma modeli) — ✅ yapıldı (ADR-0010)
 - Faceted search, filtreleme, sayfalama — ✅ yapıldı
-- **Redis**: sık okunan katalog verisi için cache, dağıtık **kilit**, **rate-limit**
-  — sırada
+- **Redis**: sık okunan katalog verisi için cache ve **rate-limit** — ✅ yapıldı
+  (ADR-0011). **Dağıtık kilit YAPILMADI** ve bu bilinçli: ihtiyaç duyulan her yerde
+  veritabanı kilidi zaten var (stokta `FOR UPDATE`, saga satırında kilit, outbox'ta
+  `SKIP LOCKED`, idempotentlikte benzersizlik kısıtı). Redis'e kilit koymak "kimde
+  kilit var" sorusuna ikinci bir cevap yaratırdı. Gerekçe ve gerekirse izlenecek
+  sıra ADR-0011'de.
 
 **Kazanım:** Arama için CQRS okuma modeli kurulur; Kafka'dan beslenen Elasticsearch
 indeksiyle faceted search, Redis ile cache ve dağıtık kilit sağlanır.

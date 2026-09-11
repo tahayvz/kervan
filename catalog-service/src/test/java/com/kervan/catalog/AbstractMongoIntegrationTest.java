@@ -6,6 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -39,12 +40,23 @@ public abstract class AbstractMongoIntegrationTest {
 
     static final MongoDBContainer MONGO_DB = new MongoDBContainer(DockerImageName.parse("mongo:7"));
 
+    /**
+     * Önbellek de gerçek Redis'e karşı çalışır. Sahte bir önbellekle test etmek,
+     * serileştirmenin ve TTL'in doğruluğunu hiç sınamazdı — hatanın çıkacağı yer tam
+     * olarak orası.
+     */
+    static final GenericContainer<?> REDIS =
+            new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+
     static {
         MONGO_DB.start();
+        REDIS.start();
     }
 
     @DynamicPropertySource
-    static void mongoProperties(DynamicPropertyRegistry registry) {
+    static void containerProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.mongodb.uri", MONGO_DB::getReplicaSetUrl);
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }
 }

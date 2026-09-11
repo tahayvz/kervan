@@ -40,6 +40,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Sık okunan ürünler için Redis önbelleği (ADR-0011). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
 
         <!-- Mongock — MongoDB migration/indeks (Flyway'in NoSQL muadili) -->
         <dependency>
@@ -90,6 +95,7 @@
             <artifactId>mongodb</artifactId>
             <scope>test</scope>
         </dependency>
+
 
         <!--
           CDC testi icin: Kafka Connect'in tasidigi olayi okumak gerekiyor.

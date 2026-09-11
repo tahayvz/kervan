@@ -21,6 +21,14 @@ spring:
       # İndeksler Mongock migration'ıyla yönetilir; Spring'in otomatik indekslemesi kapalı.
       auto-index-creation: false
 
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      # Redis erişilemezse istek beklemesin: önbellek bir hızlandırmadır, katalog
+      # onsuz da çalışmalı (bkz. CachingProductRepository).
+      timeout: 1s
+      connect-timeout: 1s
+
   security:
     oauth2:
       resourceserver:
@@ -28,6 +36,12 @@ spring:
           # order-service ile AYNI ayar. issuer-uri yerine jwk-set-uri: issuer-uri
           # acilista OIDC kesfi yapar ve Keycloak ayakta degilse uygulama kalkmaz.
           jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
+kervan:
+  cache:
+    # Yazma yolunda önbellek zaten temizleniyor; bu süre doğruluk için değil emniyet
+    # için. Bir temizleme kaçarsa bayat kayıt en fazla bu kadar yaşar.
+    product-ttl: ${KERVAN_CACHE_PRODUCT_TTL:10m}
+
 # Mongock — migration changeset'lerinin tarandığı paket
 mongock:
   migration-scan-package: com.kervan.catalog.infrastructure.migration

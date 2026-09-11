@@ -24,6 +24,7 @@ kararı veren kişi ekipten ayrıldığında gerekçe onunla birlikte gitmez.
 - [ADR-0008](0008-avro-schema-registry.md) — Olay biçimi: Avro + Schema Registry (JSON değil)
 - [ADR-0009](0009-saga-message-topology.md) — Saga mesaj topolojisi: komut/olay ayrımı, konu başına çok tip
 - [ADR-0010](0010-search-read-model.md) — Arama için ayrı okuma modeli (CQRS)
+- [ADR-0011](0011-redis-cache-and-rate-limit.md) — Redis: önbellek ve hız sınırlama (dağıtık kilit değil)
 
 ## Yeni ADR nasıl yazılır
 `NNNN-kisa-baslik.md` adıyla, `_template.md`'yi kopyalayarak.
