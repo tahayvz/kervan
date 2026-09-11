@@ -39,6 +39,14 @@ class OutboxEntity implements Persistable<UUID> {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
+    /**
+     * O anki izin (trace) W3C {@code traceparent} metni; iz yoksa null.
+     * Debezium bu sütunu Kafka başlığına kopyalar, tüketen servis izi oradan
+     * sürdürür. Gerekçe: {@code TraceParentProvider}.
+     */
+    @Column(name = "trace_parent")
+    private String traceParent;
+
     @Transient
     private boolean isNew = true;
 
@@ -47,13 +55,14 @@ class OutboxEntity implements Persistable<UUID> {
     }
 
     OutboxEntity(UUID id, String aggregateType, String aggregateId,
-                 String eventType, byte[] payload, Instant occurredAt) {
+                 String eventType, byte[] payload, Instant occurredAt, String traceParent) {
         this.id = id;
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
         this.payload = payload;
         this.occurredAt = occurredAt;
+        this.traceParent = traceParent;
     }
 
     @Override

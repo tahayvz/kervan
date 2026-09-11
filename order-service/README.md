@@ -68,6 +68,17 @@ POST /api/v1/orders
 Kafka'ya `aggregateId` anahtarıyla yazılır: aynı siparişin olayları aynı partition'a
 düşer, o sipariş için sıra korunur.
 
+### İzleme bağlamı satırda taşınır
+
+Olay Kafka'ya siparişi alan iş parçacığından gitmiyor: arada veritabanı ve Debezium
+var. Bu yüzden izleme (trace) bağlamı kendiliğinden taşınamaz ve `trace_parent`
+sütununda, veriyle birlikte yazılır. Debezium sütunu Kafka'nın `traceparent`
+başlığına kopyalar; tüketen servis aynı ize devam eder.
+
+Sütunu **outbox adaptörü** doldurur, iş mantığı değil: `OrderService` izlemeden
+habersizdir. Uygulama içi yayıncı da aynı başlığı elle koyar, böylece Debezium ile
+arasında fark kalmaz. Gerekçe: [ADR-0013](../docs/adr/0013-trace-context-across-outbox.md)
+
 ## Olay biçimi: Avro + Schema Registry
 
 Olay, servisin dışına çıkan bir sözleşmedir. Şemalar bu serviste değil, ortak

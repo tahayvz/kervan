@@ -9,6 +9,7 @@ import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.flywaydb.core.Flyway;
@@ -188,6 +189,40 @@ class OutboxCdcIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("izleme bağlamı satırdan Kafka başlığına taşınır")
+    void carriesTraceParentHeaderFromRow() throws Exception {
+        String orderId = UUID.randomUUID().toString();
+        // W3C belgesindeki örnek değer; biçimi sabit olduğu için sabit yazıldı.
+        String traceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+        insertOutboxRow(orderId, avroPayload(orderId), traceParent);
+
+        try (KafkaConsumer<String, byte[]> consumer = rawConsumer()) {
+            consumer.subscribe(List.of(TOPIC));
+
+            ConsumerRecord<String, byte[]> record = await()
+                    .atMost(Duration.ofSeconds(60))
+                    .until(() -> pollRawFor(consumer, orderId), r -> r != null);
+
+            Header header = record.headers().lastHeader("traceparent");
+            assertThat(header)
+                    .withFailMessage("traceparent başlığı yok: konektördeki "
+                            + "transforms.outbox.table.fields.additional.placement "
+                            + "ayarı düşmüş olabilir")
+                    .isNotNull();
+
+            // Değer DÜZ METİN olmalı, JSON değil.
+            //
+            // Connect'in varsayılan başlık dönüştürücüsü JSON'dur ve aynı değeri
+            // tırnak içinde yazardı: "\"00-...\"" . W3C ayrıştırıcısı böyle bir
+            // başlığı geçersiz sayıp sessizce atar — ne hata olur ne log, yalnızca
+            // zincir kopar. Bu yüzden "içeriyor" değil, EŞİT aranıyor.
+            assertThat(new String(header.value(), StandardCharsets.UTF_8))
+                    .isEqualTo(traceParent);
+        }
+    }
+
     /**
      * Kafka Connect'i başlatır; başlatamazsa yalnızca <b>yerel makinede</b> testi atlar.
      *
@@ -280,13 +315,18 @@ class OutboxCdcIntegrationTest {
     }
 
     private static void insertOutboxRow(String orderId, byte[] payload) throws Exception {
+        insertOutboxRow(orderId, payload, null);
+    }
+
+    private static void insertOutboxRow(String orderId, byte[] payload, String traceParent)
+            throws Exception {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
              PreparedStatement statement = connection.prepareStatement("""
                      INSERT INTO outbox_messages
                          (id, aggregate_type, aggregate_id, event_type, destination,
-                          payload, occurred_at)
-                     VALUES (?, 'Order', ?, 'OrderPlaced', ?, ?, now())
+                          payload, occurred_at, trace_parent)
+                     VALUES (?, 'Order', ?, 'OrderPlaced', ?, ?, now(), ?)
                      """)) {
             statement.setObject(1, UUID.randomUUID());
             statement.setString(2, orderId);
@@ -294,6 +334,10 @@ class OutboxCdcIntegrationTest {
             // mesajın düşeceği konudur.
             statement.setString(3, TOPIC);
             statement.setBytes(4, payload);
+            // NULL geçilebilir: izleme kapalıyken satırda bağlam olmaz. Diğer
+            // testler bu yolu kullanır, yani "izsiz satır da yayınlanıyor mu"
+            // sorusu da her koşuda doğrulanmış olur.
+            statement.setString(5, traceParent);
             statement.executeUpdate();
         }
     }

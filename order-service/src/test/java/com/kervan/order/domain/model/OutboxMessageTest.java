@@ -39,9 +39,9 @@ class OutboxMessageTest {
     @DisplayName("aynı içerikli iki kayıt eşittir")
     void comparesPayloadByContent() {
         OutboxMessage first = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null, null);
         OutboxMessage second = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null, null);
 
         // Kayıt tipinin ürettiği equals diziyi referansa göre karşılaştırırdı;
         // içerikleri aynı olan bu ikisi eşit sayılmazdı.
@@ -52,9 +52,9 @@ class OutboxMessageTest {
     @DisplayName("farklı payload'lı kayıtlar eşit değildir")
     void differentPayloadsAreNotEqual() {
         OutboxMessage first = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{1, 2, 3}, NOW, null, null);
         OutboxMessage second = new OutboxMessage(
-                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{9, 9, 9}, NOW, null);
+                "m-1", "Order", "order-1", "OrderPlaced", TOPIC, new byte[]{9, 9, 9}, NOW, null, null);
 
         assertThat(first).isNotEqualTo(second);
     }
@@ -78,6 +78,6 @@ class OutboxMessageTest {
 
         assertThat(pending.isPublished()).isFalse();
         assertThat(new OutboxMessage("m-1", "Order", "order-1", "OrderPlaced", TOPIC,
-                new byte[]{1}, NOW, NOW).isPublished()).isTrue();
+                new byte[]{1}, NOW, NOW, null).isPublished()).isTrue();
     }
 }

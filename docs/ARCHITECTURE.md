@@ -176,12 +176,39 @@ bu sayede iş kuralları test edilebilir ve teknoloji değişikliğine dayanıkl
 
 | Ayak | Araç | Ne cevaplar? |
 |---|---|---|
-| Trace | OpenTelemetry + Jaeger | İstek servisler arası nasıl aktı, nerede kaç ms? |
-| Metrik | Prometheus + Grafana | Hız, hata oranı, doygunluk (RED/USE)? |
-| Log | Loki | Ne oldu, hangi trace-id ile? |
+| Trace | OpenTelemetry + Jaeger | İstek servisler arası nasıl aktı, nerede kaç ms? (✅) |
+| Metrik | Prometheus + Grafana | Hız, hata oranı, doygunluk (RED/USE)? (planlı) |
+| Log | Loki | Ne oldu, hangi trace-id ile? (planlı) |
 
-OTel context propagation sayesinde bir istek Gateway'den girip 4 servisi dolaşsa
-bile **tek bir trace** olarak görünür.
+Enstrümantasyon kod içinde yapılır (Micrometer köprüsü), Java ajanı ile değil —
+gerekçe ADR-0012'de. Span'ler doğrudan Jaeger'a değil bir **OTel Collector**'a
+gider; uygulama tek adres bilir, arkadaki depo değişebilir.
+
+### 7.1 İzin asenkron geçişte kopmaması
+
+Senkron çağrıda bağlam kendiliğinden taşınır: kütüphane isteğe `traceparent`
+başlığı ekler. Bu projede sipariş akışının ortasında **hiç uygulama kodu olmayan**
+bir adım var: olay outbox tablosuna yazılır, Debezium değişiklik günlüğünden okuyup
+Kafka'ya taşır (§4.2). Debezium'un ne isteği ne de iş parçacığı vardır; taşıyacak
+bağlamı bilemez.
+
+Bu yüzden bağlam **veriyle birlikte** taşınır: outbox satırında `trace_parent`
+sütunu, Debezium'un `EventRouter`'ı ile Kafka `traceparent` başlığına kopyalanır.
+Böylece bir sipariş tek zincir olarak görünür:
+
+```
+POST /api/v1/orders ──► order-service ──► outbox (trace_parent)
+                                              │
+                                         Debezium
+                                              ▼
+                          Kafka (traceparent başlığı)
+                                              │
+                            ┌─────────────────┴─────────────────┐
+                            ▼                                   ▼
+                     inventory-service                   payment-service
+```
+
+Karar kaydı: ADR-0013.
 
 ---
 

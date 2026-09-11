@@ -39,6 +39,12 @@ import java.util.Objects;
  * baytı şemanın Schema Registry'deki kimliğini taşır, bu yüzden olayı okuyan taraf
  * hangi şemayla yazıldığını mesajın kendisinden bulur (ADR-0008).
  *
+ * <h2>traceParent neden burada?</h2>
+ * Kayıt, onu yazan isteğin izleme (trace) kimliğini de taşır. Olay Kafka'ya bu iş
+ * parçacığından gitmediği için — arada veritabanı ve Debezium vardır — izleme bağlamı
+ * kendiliğinden taşınamaz; veriyle birlikte yazılmak zorundadır. Böylece bir siparişin
+ * yolculuğu Jaeger'da tek zincir hâlinde görünür (ADR-0013).
+ *
  * <p>Karar kaydı: {@code docs/adr/0004-transactional-outbox-debezium.md}
  */
 public record OutboxMessage(
@@ -49,7 +55,8 @@ public record OutboxMessage(
         String destination,
         byte[] payload,
         Instant occurredAt,
-        Instant publishedAt) {
+        Instant publishedAt,
+        String traceParent) {
 
     public OutboxMessage {
         Objects.requireNonNull(aggregateType, "aggregateType null olamaz");
@@ -73,8 +80,10 @@ public record OutboxMessage(
     public static OutboxMessage pending(String aggregateType, String aggregateId,
                                         String eventType, String destination,
                                         byte[] payload, Instant occurredAt) {
+        // İzleme bağlamı burada değil, kaydı veritabanına yazan katmanda doldurulur:
+        // iş mantığının izlemeden haberi olmamalı.
         return new OutboxMessage(null, aggregateType, aggregateId, eventType, destination,
-                payload, occurredAt, null);
+                payload, occurredAt, null, null);
     }
 
     public boolean isPublished() {
@@ -96,21 +105,22 @@ public record OutboxMessage(
                 && Objects.equals(destination, that.destination)
                 && Arrays.equals(payload, that.payload)
                 && Objects.equals(occurredAt, that.occurredAt)
-                && Objects.equals(publishedAt, that.publishedAt);
+                && Objects.equals(publishedAt, that.publishedAt)
+                && Objects.equals(traceParent, that.traceParent);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, aggregateType, aggregateId, eventType, destination,
-                Arrays.hashCode(payload), occurredAt, publishedAt);
+                Arrays.hashCode(payload), occurredAt, publishedAt, traceParent);
     }
 
     @Override
     public String toString() {
         // Payload ikili veridir; log'a basılırsa okunmaz bir yığın üretir.
         // Yerine boyutu yazılır: sorun ararken asıl işe yarayan bilgi odur.
-        return "OutboxMessage[id=%s, aggregateType=%s, aggregateId=%s, eventType=%s, destination=%s, payloadBytes=%d, occurredAt=%s, publishedAt=%s]"
+        return "OutboxMessage[id=%s, aggregateType=%s, aggregateId=%s, eventType=%s, destination=%s, payloadBytes=%d, occurredAt=%s, publishedAt=%s, traceParent=%s]"
                 .formatted(id, aggregateType, aggregateId, eventType, destination,
-                        payload.length, occurredAt, publishedAt);
+                        payload.length, occurredAt, publishedAt, traceParent);
     }
 }

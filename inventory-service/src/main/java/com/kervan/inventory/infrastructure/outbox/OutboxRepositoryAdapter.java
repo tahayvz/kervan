@@ -1,6 +1,7 @@
 package com.kervan.inventory.infrastructure.outbox;
 
 import com.kervan.inventory.domain.port.OutboxRepository;
+import com.kervan.inventory.infrastructure.observability.TraceParentProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -13,14 +14,21 @@ class OutboxRepositoryAdapter implements OutboxRepository {
     private static final String AGGREGATE_TYPE = "Inventory";
 
     private final SpringDataOutboxRepository repository;
+    private final TraceParentProvider traceParents;
 
-    OutboxRepositoryAdapter(SpringDataOutboxRepository repository) {
+    OutboxRepositoryAdapter(SpringDataOutboxRepository repository,
+                            TraceParentProvider traceParents) {
         this.repository = repository;
+        this.traceParents = traceParents;
     }
 
     @Override
     public void save(String aggregateId, String eventType, byte[] payload, Instant occurredAt) {
+        // İzleme bağlamı burada yakalanır, çağıran kodda değil: olayı yazan iş
+        // mantığının izlemeden haberi olmaması gerekir. Yakalama noktası "kaydın
+        // veritabanına düştüğü an"dır; o an hâlâ isteğin iş parçacığındayız.
         repository.save(new OutboxEntity(
-                UUID.randomUUID(), AGGREGATE_TYPE, aggregateId, eventType, payload, occurredAt));
+                UUID.randomUUID(), AGGREGATE_TYPE, aggregateId, eventType, payload, occurredAt,
+                traceParents.current()));
     }
 }

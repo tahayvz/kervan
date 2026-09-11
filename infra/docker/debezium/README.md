@@ -185,6 +185,18 @@ sonradan elenir, yani boşa iş. `filtered` yalnızca izin listesindeki tabloyu 
   **edemez**. `snapshot.mode=no_data` olduğu için yeniden başlarken aradaki
   değişiklikleri de getiremez — o değişiklikler kaybolur.
 
+**`table.fields.additional.placement` = `trace_parent:header:traceparent`.**
+İzleme bağlamını satırdan Kafka başlığına kopyalar. Biçim
+`<sütun>:<yerleşim>:<başlık adı>`. Gerekçe ADR-0013'te: Debezium'un ne isteği ne de
+iş parçacığı vardır, bu yüzden bağlamı kendisi üretemez; satırda yazanı taşır.
+
+**`header.converter` = `StringConverter`.** Bu satır olmadan yukarıdaki ayar
+işe yaramaz. Connect'in varsayılan başlık dönüştürücüsü JSON'dur ve değeri
+**tırnak içinde** yazar: `"00-4bf9...-01"`. W3C ayrıştırıcısı tırnaklı metni
+geçersiz sayıp atar — ne istisna olur ne log, yalnızca izleme zinciri kopar.
+`OutboxCdcIntegrationTest` başlığı "var mı" diye değil, değeri **birebir eşit mi**
+diye kontrol eder; "içeriyor" yazsaydı tırnaklı hâli de testi geçerdi.
+
 **`binary.handling.mode` = `bytes`.** Varsayılanı `bytes`tir ama açıkça yazıldı:
 `base64` olsaydı gövde bir kez daha kodlanır ve tüketici Avro yerine metin görürdü.
 

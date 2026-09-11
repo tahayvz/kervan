@@ -49,6 +49,19 @@ mongock:
 
 # Actuator — health/liveness/readiness (K8s probe'ları, Faz 9)
 management:
+  # --- İzleme (tracing) ---
+  # Bir isteğin servisler arasında nasıl aktığının kaydı. Her adım bir "span",
+  # tüm zincir bir "trace". Gerekçe ve alternatifler: ADR-0012.
+  tracing:
+    sampling:
+      # Lokalde her istek kaydedilir. Üretimde bu oran düşürülür: her isteği
+      # saklamak hem ağ hem depolama maliyetidir ve hata ayıklamak için gerekmez.
+      probability: ${KERVAN_TRACE_SAMPLE_RATE:1.0}
+  otlp:
+    tracing:
+      # Span'ler doğrudan Jaeger'a değil toplayıcıya (OTel Collector) gider.
+      # Uygulama tek bir adres bilir; arkadaki sistem değişirse uygulama değişmez.
+      endpoint: ${KERVAN_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
   endpoints:
     web:
       exposure:

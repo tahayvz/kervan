@@ -49,6 +49,14 @@ class OutboxEntity implements Persistable<UUID> {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    /**
+     * O anki izin (trace) W3C {@code traceparent} metni; iz yoksa null.
+     * Debezium bu sütunu Kafka başlığına kopyalar; uygulama içi yayıncı da aynı
+     * başlığı elle koyar. İki yol da aynı sonucu üretir (ADR-0013).
+     */
+    @Column(name = "trace_parent")
+    private String traceParent;
+
     @Column(nullable = false)
     private int attempts;
 
@@ -71,7 +79,8 @@ class OutboxEntity implements Persistable<UUID> {
     }
 
     OutboxEntity(UUID id, String aggregateType, String aggregateId, String eventType,
-                 String destination, byte[] payload, Instant occurredAt, Instant publishedAt) {
+                 String destination, byte[] payload, Instant occurredAt, Instant publishedAt,
+                 String traceParent) {
         this.id = id;
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
@@ -80,6 +89,7 @@ class OutboxEntity implements Persistable<UUID> {
         this.payload = payload;
         this.occurredAt = occurredAt;
         this.publishedAt = publishedAt;
+        this.traceParent = traceParent;
     }
 
     @Override
@@ -128,5 +138,9 @@ class OutboxEntity implements Persistable<UUID> {
 
     Instant getPublishedAt() {
         return publishedAt;
+    }
+
+    String getTraceParent() {
+        return traceParent;
     }
 }

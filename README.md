@@ -78,7 +78,8 @@ marked done unless its code and tests are in this repository.
 | 4d | **Saga orchestrator — state machine, compensation, idempotent steps** | ✅ Done |
 | 5a | **Search Service — Elasticsearch read model fed by catalogue CDC** | ✅ Done |
 | 5b | **Redis — cache and rate limiting** (no distributed lock; ADR-0011 says why) | ✅ Done |
-| 6 | OpenTelemetry + Prometheus + Grafana + Jaeger | Planned |
+| 6a | **Distributed tracing — OpenTelemetry + Jaeger, and the trace survives the outbox** | ✅ Done |
+| 6b | Metrics and logs — Prometheus, Grafana, Loki | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
 | 9 | Kubernetes + Helm | Planned |
@@ -399,6 +400,44 @@ answer wins. ADR-0011 records this, and the order to reach for if one is ever ne
 
 ---
 
+### Tracing: following an order that nobody hands over
+
+Seven services, and one order touches three of them. When a request is slow or stalls,
+no single service's log holds the answer, because no single service sees the whole
+chain. Tracing does: every step is a span, the whole chain is a trace.
+
+Instrumentation is **in code** — Micrometer's tracing bridge over OpenTelemetry — not
+the `-javaagent` agent. The agent has wider automatic coverage, but it only exists at
+runtime, so nothing about it can be verified in CI, and in this repository a behaviour
+without a test is a behaviour that does not exist. Spans go to an OpenTelemetry
+Collector rather than straight to Jaeger, so the applications know one address and the
+backend behind it can change without touching them. ADR-0012 records the trade.
+
+**The hard part is that the chain has a step with no application code in it.** An order
+event is never written to Kafka by the service: it is written to the outbox table in the
+order's own transaction, and Debezium later reads the database's change log and
+publishes it. Debezium has no request and no thread of the caller — it cannot know what
+context to carry. Left alone, every service starts its own trace, and one order shows up
+in Jaeger as four unconnected fragments: exactly the question tracing exists to answer,
+unanswered.
+
+So the context travels **with the data**. The outbox row carries a `trace_parent`
+column, filled in by the outbox adapter — the business code never learns tracing exists.
+Debezium's `EventRouter` copies that column into the Kafka `traceparent` header, and
+consumers resume the same trace. One order, one chain: HTTP request → stock → payment →
+completion. ADR-0013 has the reasoning, including why the context does not go inside the
+Avro payload.
+
+Two details are easy to get wrong and both are pinned by tests. Kafka Connect's default
+header converter is JSON, which would write the value **in quotes**; a W3C parser
+discards a quoted header silently — no exception, no log, just a broken chain — so the
+integration test asserts the header is byte-for-byte equal, not merely present. And the
+outbox producer has Spring's automatic observation switched **off**: it runs from a
+scheduled job whose own trace has nothing to do with the order, and if it were on, the
+library would overwrite the correct context with a plausible-looking wrong one.
+
+---
+
 ### The saga
 
 An order spans three services, and a distributed transaction across them does not scale.
@@ -485,7 +524,8 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | API gateway | Spring Cloud Gateway | ✅ |
 | Identity | Keycloak (OAuth2 / OIDC / JWT) | ✅ |
 | Resilience | Resilience4j | planned |
-| Observability | OpenTelemetry, Prometheus, Grafana, Jaeger, Loki | planned |
+| Tracing | OpenTelemetry (Micrometer bridge) + Jaeger | ✅ |
+| Metrics / logs | Prometheus, Grafana, Loki | planned |
 | Orchestration | Kubernetes + Helm | planned |
 | CI | GitHub Actions + CodeQL | ✅ |
 

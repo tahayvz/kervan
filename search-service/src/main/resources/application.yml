@@ -11,6 +11,11 @@ spring:
     uris: ${SPRING_ELASTICSEARCH_URIS:http://localhost:9200}
 
   kafka:
+    listener:
+      # Tüketilen her mesaj için span üretilir ve mesajın `traceparent` başlığı
+      # okunarak ÜRETEN tarafın izine bağlanır. Kapalı olsaydı her servis kendi
+      # ayrı izini başlatır, zincir Jaeger'da kopuk görünürdü.
+      observation-enabled: true
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: search-service
@@ -29,6 +34,19 @@ kervan:
     catalog-topic: kervan.catalog.products
 
 management:
+  # --- İzleme (tracing) ---
+  # Bir isteğin servisler arasında nasıl aktığının kaydı. Her adım bir "span",
+  # tüm zincir bir "trace". Gerekçe ve alternatifler: ADR-0012.
+  tracing:
+    sampling:
+      # Lokalde her istek kaydedilir. Üretimde bu oran düşürülür: her isteği
+      # saklamak hem ağ hem depolama maliyetidir ve hata ayıklamak için gerekmez.
+      probability: ${KERVAN_TRACE_SAMPLE_RATE:1.0}
+  otlp:
+    tracing:
+      # Span'ler doğrudan Jaeger'a değil toplayıcıya (OTel Collector) gider.
+      # Uygulama tek bir adres bilir; arkadaki sistem değişirse uygulama değişmez.
+      endpoint: ${KERVAN_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
   endpoints:
     web:
       exposure:

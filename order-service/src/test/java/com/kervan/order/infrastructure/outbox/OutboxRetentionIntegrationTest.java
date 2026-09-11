@@ -106,7 +106,7 @@ class OutboxRetentionIntegrationTest extends AbstractIntegrationTest {
         String aggregateId = UUID.randomUUID().toString();
         outboxRepository.save(new OutboxMessage(
                 null, "Order", aggregateId, "OrderPlaced", "kervan.orders.events",
-                "payload".getBytes(StandardCharsets.UTF_8), occurredAt, publishedAt));
+                "payload".getBytes(StandardCharsets.UTF_8), occurredAt, publishedAt, null));
         return aggregateId;
     }
 

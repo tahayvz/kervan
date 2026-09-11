@@ -29,6 +29,8 @@
     "transforms.outbox.table.field.event.type": "event_type",
     "transforms.outbox.table.field.event.payload": "payload",
     "transforms.outbox.table.expand.json.payload": "false",
+    "transforms.outbox.table.fields.additional.placement": "trace_parent:header:traceparent",
+    "header.converter": "org.apache.kafka.connect.storage.StringConverter",
     "transforms.outbox.route.by.field": "destination",
     "transforms.outbox.route.topic.replacement": "${routedByValue}",
 

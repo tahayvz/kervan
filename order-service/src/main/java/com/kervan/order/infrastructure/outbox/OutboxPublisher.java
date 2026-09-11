@@ -2,6 +2,8 @@ package com.kervan.order.infrastructure.outbox;
 
 import com.kervan.order.domain.model.OutboxMessage;
 import com.kervan.order.domain.port.OutboxRepository;
+import com.kervan.order.infrastructure.observability.TraceParentProvider;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +13,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -60,6 +63,14 @@ import java.util.concurrent.TimeoutException;
  * kullanilan ortamda bu ayar {@code false} yapilir. Karsilastirma:
  * {@code infra/docker/debezium/README.md}.
  *
+ * <h2>İzleme bağlamı</h2>
+ * Her kayıt, onu YAZAN isteğin izleme kimliğiyle gönderilir; bu yayıncının kendi
+ * izleme bağlamıyla değil. Yayıncı zamanlanmış bir iştir, siparişi alan istekle
+ * arasında bağ yoktur. Aynı sebeple bu şablonda Spring'in otomatik gözlemi
+ * kapalıdır ({@code KafkaProducerConfig}): açık olsaydı kütüphane başlığı kendi
+ * yanlış bağlamıyla ezerdi. Debezium ile bu sınıf aynı başlığı üretir; hangi yol
+ * kullanılırsa kullanılsın tüketicinin gördüğü şey aynıdır (ADR-0013).
+ *
  * <p>Teslimat <b>en az bir kez</b>'dir: işaretleme öncesi çökme aynı olayı tekrar
  * gönderir. Tüketiciler idempotent olmalıdır ({@link OutboxMessage}).
  */
@@ -105,7 +116,7 @@ class OutboxPublisher {
     /** @return gönderim başarılıysa true; false dönerse bu tur sonlandırılır */
     private boolean publish(OutboxMessage message) {
         try {
-            kafkaTemplate.send(message.destination(), message.aggregateId(), message.payload())
+            kafkaTemplate.send(toRecord(message))
                     .get(sendTimeout.toMillis(), TimeUnit.MILLISECONDS);
 
             outboxRepository.markPublished(message.id(), clock.instant());
@@ -125,6 +136,18 @@ class OutboxPublisher {
             recordFailure(message, e.getMessage());
             return false;
         }
+    }
+
+    /** Satırda iz varsa W3C başlığı olarak eklenir; yoksa tüketici yeni iz başlatır. */
+    private ProducerRecord<String, byte[]> toRecord(OutboxMessage message) {
+        ProducerRecord<String, byte[]> record = new ProducerRecord<>(
+                message.destination(), message.aggregateId(), message.payload());
+
+        if (message.traceParent() != null) {
+            record.headers().add(TraceParentProvider.HEADER,
+                    message.traceParent().getBytes(StandardCharsets.UTF_8));
+        }
+        return record;
     }
 
     private void recordFailure(OutboxMessage message, String reason) {

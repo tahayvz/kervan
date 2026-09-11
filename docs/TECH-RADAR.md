@@ -151,11 +151,15 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   time limiter, bulkhead, rate limiter — Micrometer ile metrik verir.
 - **Alternatif:** Netflix Hystrix — **kullanımdan kalktı (deprecated)**; Resilience4j onun halefi.
 
-### OpenTelemetry + Jaeger
+### OpenTelemetry + Jaeger  ✅
 - **Problem:** Dağıtık sistemde "istek nerede takıldı?" görünmez.
-- **Neden:** OTel **vendor-nötr** standart; otomatik enstrümantasyon ile trace/metrik
-  üretir. Jaeger trace'leri görselleştirir (servis servis, span span).
+- **Neden:** OTel **vendor-nötr** standart; Jaeger trace'leri görselleştirir.
+- **Nasıl:** Enstrümantasyon kod içinde — `micrometer-tracing-bridge-otel` +
+  OTLP dışa aktarıcı. Span'ler bir **OTel Collector**'a gider, oradan Jaeger'a.
 - **Alternatif:** Zipkin (daha basit) — OTel ekosistemi daha geniş ve gelecek-güvenli.
+- **Alternatif:** OpenTelemetry Java **ajanı** (`-javaagent`) — kapsamı daha geniş
+  ama yalnızca gerçek çalıştırmada var olduğu için CI'da doğrulanamaz. Elendi;
+  gerekçe ADR-0012'de.
 
 ### Prometheus + Grafana + Loki
 - **Problem:** Metrik toplama, dashboard, alarm ve merkezî log.

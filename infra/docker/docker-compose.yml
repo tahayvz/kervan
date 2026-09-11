@@ -11,7 +11,8 @@
 #           (eklendi; Postgres WAL). Mongo change streams için Mongo replica set
 #           moduna alınacak — sonraki adım.
 #   Faz 5 → Elasticsearch (eklendi) + Redis (eklendi)
-#   Faz 6 → Prometheus + Grafana + Jaeger + Loki
+#   Faz 6 → Jaeger + OTel Collector (eklendi). Prometheus + Grafana + Loki
+#           sonraki adim.
 #
 # Çalıştırma:  docker compose -f infra/docker/docker-compose.yml up -d
 # Durdurma:    docker compose -f infra/docker/docker-compose.yml down
@@ -283,6 +284,10 @@ services:
     depends_on:
       keycloak:
         condition: service_healthy
+      # Saglik kosulu YOK: toplayici ayakta olmasa da ag gecidi calismali.
+      # Izleme bir teshis aracidir, on kosul degil.
+      otel-collector:
+        condition: service_started
     ports:
       - "8000:8000"
     environment:
@@ -291,6 +296,39 @@ services:
       KERVAN_JWKS_URI: http://keycloak:8080/realms/kervan/protocol/openid-connect/certs
       KERVAN_SEARCH_URL: http://search-service:8087
       SPRING_DATA_REDIS_URL: redis://redis:6379
+      # Konteyner icinden 'localhost' konteynerin KENDISIDIR; varsayilan adres
+      # burada calismaz. Toplayiciya compose agindaki adiyla gidilir.
+      KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    restart: unless-stopped
+
+  # --- Gozlemlenebilirlik: izleme (Faz 6) ---
+  #
+  # Uygulamalar span'leri Jaeger'a DOGRUDAN gondermez, toplayiciya gonderir.
+  # Tek adres bilirler; arkadaki depo degisirse uygulama ayari degismez.
+  # Gerekce: docs/adr/0012-observability-instrumentation.md
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.135.0
+    container_name: kervan-otel-collector
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otelcol/config.yml:ro
+    ports:
+      # Servisler makinede calisiyor (konteynerde degil), bu yuzden portlar disari
+      # acilmak zorunda. 4318 HTTP, 4317 gRPC.
+      - "4318:4318"
+      - "4317:4317"
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  # Iz deposu ve arayuzu: http://localhost:16686
+  # Depo BELLEKTE. Yeniden baslatinca izler gider; lokal gelistirme icin yeterli.
+  # Kalici depo (Cassandra/Elasticsearch) bu projenin konusu degil.
+  jaeger:
+    image: jaegertracing/jaeger:2.13.0
+    container_name: kervan-jaeger
+    ports:
+      - "16686:16686"
     restart: unless-stopped
 
 volumes:

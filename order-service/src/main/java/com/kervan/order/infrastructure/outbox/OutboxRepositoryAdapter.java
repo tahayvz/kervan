@@ -2,6 +2,7 @@ package com.kervan.order.infrastructure.outbox;
 
 import com.kervan.order.domain.model.OutboxMessage;
 import com.kervan.order.domain.port.OutboxRepository;
+import com.kervan.order.infrastructure.observability.TraceParentProvider;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,9 +18,12 @@ class OutboxRepositoryAdapter implements OutboxRepository {
     private static final int MAX_ERROR_LENGTH = 500;
 
     private final SpringDataOutboxRepository repository;
+    private final TraceParentProvider traceParents;
 
-    OutboxRepositoryAdapter(SpringDataOutboxRepository repository) {
+    OutboxRepositoryAdapter(SpringDataOutboxRepository repository,
+                            TraceParentProvider traceParents) {
         this.repository = repository;
+        this.traceParents = traceParents;
     }
 
     @Override
@@ -34,7 +38,11 @@ class OutboxRepositoryAdapter implements OutboxRepository {
                 message.destination(),
                 message.payload(),
                 message.occurredAt(),
-                message.publishedAt()));
+                message.publishedAt(),
+                // İzleme bağlamı burada yakalanır, çağıran kodda değil: kaydın
+                // veritabanına düştüğü an hâlâ isteğin iş parçacığındayız. Kayıt
+                // zaten bir izle geldiyse (yeniden yazım) o korunur.
+                message.traceParent() != null ? message.traceParent() : traceParents.current()));
 
         return toDomain(saved);
     }
@@ -111,6 +119,7 @@ class OutboxRepositoryAdapter implements OutboxRepository {
                 entity.getDestination(),
                 entity.getPayload(),
                 entity.getOccurredAt(),
-                entity.getPublishedAt());
+                entity.getPublishedAt(),
+                entity.getTraceParent());
     }
 }

@@ -1,0 +1,35 @@
+# OpenTelemetry Collector — izlerin tek giriş kapısı.
+#
+# Uygulamalar Jaeger'ı tanımaz; yalnızca bu adresi bilir. Arkadaki depo değişirse
+# (Jaeger yerine Tempo, ya da ikisi birden) uygulamalarda tek satır değişmez.
+# Gerekçe ve alternatifler: docs/adr/0012-observability-instrumentation.md
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        # 0.0.0.0 şart: varsayılan localhost olsaydı konteyner dışından gelen
+        # istekler reddedilirdi ve servisler makinede çalışıyor.
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  # Span'ler tek tek değil küme hâlinde gönderilir: her span için ayrı ağ çağrısı
+  # yapmak toplayıcıyı da depoyu da gereksiz yorar.
+  batch:
+    timeout: 5s
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      # Lokal ağda TLS yok. Üretimde bu satır kaldırılır ve sertifika tanımlanır.
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]

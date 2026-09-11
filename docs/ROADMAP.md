@@ -146,16 +146,33 @@ indeksiyle faceted search, Redis ile cache ve dağıtık kilit sağlanır.
 
 ---
 
-## Faz 6 — Gözlemlenebilirlik (Observability)
+## Faz 6 — Gözlemlenebilirlik (Observability)  · 6a ✅ · 6b planlı
 
 **Neden:** Mikroservislerde bir hata 5 servise yayılabilir. "Nerede, kaç ms takıldı?"
 sorusuna cevap veremezsen prod'da körsün. Üç ayak: **log, metrik, trace**.
 
 **Ne inşa edilecek:**
-- **OpenTelemetry** ile otomatik enstrümantasyon (trace + metrik)
-- **Jaeger**: dağıtık trace (istek servisler arası nasıl aktı)
-- **Prometheus** + **Grafana**: metrik toplama + dashboard'lar (RED/USE)
-- **Loki**: merkezî log; trace-id ile log korelasyonu
+- **OpenTelemetry** ile enstrümantasyon (trace + metrik) — ✅ yapıldı (izleme)
+- **Jaeger**: dağıtık trace (istek servisler arası nasıl aktı) — ✅ yapıldı
+- **Prometheus** + **Grafana**: metrik toplama + dashboard'lar (RED/USE) — 6b
+- **Loki**: merkezî log; trace-id ile log korelasyonu — 6b
+
+**6a'da yapılanlar (izleme):** Altı servise de `micrometer-tracing-bridge-otel` +
+OTLP dışa aktarıcı eklendi. Enstrümantasyon **kod içinde**; Java ajanı bilinçli
+olarak kullanılmadı (ADR-0012) — gerekçe: ajan CI'da doğrulanamaz ve bu depoda
+testi olmayan davranış yoktur. Span'ler doğrudan Jaeger'a değil **OTel
+Collector**'a gider; uygulama tek adres bilir.
+
+Asıl iş, izin **asenkron geçişte kopmamasıydı**. Olay Kafka'ya uygulamadan
+gitmiyor: önce outbox tablosuna yazılıyor, Debezium değişiklik günlüğünden okuyup
+yayınlıyor. Debezium'un ne isteği ne de iş parçacığı var, taşıyacak bağlamı
+bilemez. Çözüm: `trace_parent` sütunu + `EventRouter`'ın sütunu Kafka başlığına
+kopyalaması (ADR-0013). Böylece bir sipariş Jaeger'da tek zincir olarak görünüyor:
+HTTP isteği → stok → ödeme → tamamlanma.
+
+Bir tuzak testle sabitlendi: Connect'in varsayılan başlık dönüştürücüsü JSON'dur
+ve değeri tırnak içinde yazar; W3C ayrıştırıcısı böyle bir başlığı sessizce atar.
+`OutboxCdcIntegrationTest` başlığın **birebir eşit** olduğunu doğruluyor.
 
 **Kazanım:** OpenTelemetry ile uçtan uca trace context propagation sağlanır; bir
 isteğin hangi serviste kaç ms harcadığı Jaeger'da izlenir; Grafana'da RED

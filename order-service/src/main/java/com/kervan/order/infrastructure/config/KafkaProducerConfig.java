@@ -38,6 +38,15 @@ class KafkaProducerConfig {
         this.bootstrapServers = bootstrapServers;
     }
 
+    /**
+     * Outbox üreticisinde otomatik gözlem (observation) <b>kapalı</b> bırakıldı.
+     *
+     * <p>Açık olsaydı Spring her gönderime kendi izleme bağlamını başlık olarak
+     * eklerdi. Ama bu üretici zamanlanmış bir işten çalışır; onun izi siparişi alan
+     * istekle ilgisizdir. Doğru bağlam outbox satırında duran bağlamdır ve onu
+     * {@code OutboxPublisher} elle koyar. İkisi birden açık olsaydı kütüphane
+     * doğrusunu ezer, Jaeger'da zincir kopuk görünürdü (ADR-0013).
+     */
     @Bean
     KafkaTemplate<String, byte[]> outboxKafkaTemplate() {
         Map<String, Object> props = base();
@@ -57,7 +66,13 @@ class KafkaProducerConfig {
         props.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
         props.put(AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY,
                 TopicRecordNameStrategy.class.getName());
-        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+
+        KafkaTemplate<Object, Object> template = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+        // Burada gözlem AÇIK: ölü mektup, mesajı işlerken hata alan tüketicinin
+        // iş parçacığından yazılır. O anki iz doğru izdir — DLT kaydına bakan kişi
+        // hangi isteğin başarısız olduğunu oradan bulur.
+        template.setObservationEnabled(true);
+        return template;
     }
 
     private Map<String, Object> base() {

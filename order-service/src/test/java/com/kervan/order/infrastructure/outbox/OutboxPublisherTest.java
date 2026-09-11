@@ -2,9 +2,11 @@ package com.kervan.order.infrastructure.outbox;
 
 import com.kervan.order.domain.model.OutboxMessage;
 import com.kervan.order.domain.port.OutboxRepository;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
@@ -16,6 +18,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -50,8 +53,24 @@ class OutboxPublisherTest {
     }
 
     private OutboxMessage message(String id, String aggregateId) {
+        return message(id, aggregateId, null);
+    }
+
+    private OutboxMessage message(String id, String aggregateId, String traceParent) {
         return new OutboxMessage(id, "Order", aggregateId, "OrderPlaced", TOPIC,
-                payloadOf(aggregateId), NOW, null);
+                payloadOf(aggregateId), NOW, null, traceParent);
+    }
+
+    /**
+     * Gönderilen tek kaydı yakalar. Kayıt üzerinden doğrulama yapılıyor çünkü
+     * yayıncı artık yalnızca konu/anahtar/gövde değil, başlık da yazıyor.
+     */
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, byte[]> onlySentRecord() {
+        ArgumentCaptor<ProducerRecord<String, byte[]>> captor =
+                ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(captor.capture());
+        return captor.getValue();
     }
 
     /**
@@ -63,13 +82,15 @@ class OutboxPublisherTest {
         return aggregateId.getBytes(StandardCharsets.UTF_8);
     }
 
+    @SuppressWarnings("unchecked")
     private void kafkaAccepts() {
-        when(kafkaTemplate.send(anyString(), anyString(), any(byte[].class)))
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
     }
 
+    @SuppressWarnings("unchecked")
     private void kafkaRejects(String reason) {
-        when(kafkaTemplate.send(anyString(), anyString(), any(byte[].class)))
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException(reason)));
     }
 
@@ -81,7 +102,42 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate).send(TOPIC, "order-1", payloadOf("order-1"));
+        ProducerRecord<String, byte[]> sent = onlySentRecord();
+        assertThat(sent.topic()).isEqualTo(TOPIC);
+        assertThat(sent.key()).isEqualTo("order-1");
+        assertThat(sent.value()).isEqualTo(payloadOf("order-1"));
+    }
+
+    @Test
+    @DisplayName("satırdaki izleme bağlamı traceparent başlığı olarak gider")
+    void shouldCarryTraceParentFromRow() {
+        String traceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        when(outboxRepository.lockDeliverable(100, MAX_ATTEMPTS))
+                .thenReturn(List.of(message("m-1", "order-1", traceParent)));
+        kafkaAccepts();
+
+        publisher.publishPending();
+
+        // Bağlam satırdan gelir, bu iş parçacığından DEĞİL: yayıncı zamanlanmış bir
+        // iştir ve onun izi siparişi alan istekle ilgisizdir.
+        assertThat(onlySentRecord().headers().lastHeader("traceparent"))
+                .isNotNull()
+                .extracting(header -> new String(header.value(), StandardCharsets.UTF_8))
+                .isEqualTo(traceParent);
+    }
+
+    @Test
+    @DisplayName("satırda iz yoksa başlık da yok; olay yine gönderilir")
+    void shouldPublishWithoutTraceParentWhenRowHasNone() {
+        when(outboxRepository.lockDeliverable(100, MAX_ATTEMPTS))
+                .thenReturn(List.of(message("m-1", "order-1")));
+        kafkaAccepts();
+
+        publisher.publishPending();
+
+        // İzleme bir teşhis aracıdır; yokluğu olayın yayınlanmasını engellemez.
+        assertThat(onlySentRecord().headers().lastHeader("traceparent")).isNull();
+        verify(outboxRepository).markPublished("m-1", NOW);
     }
 
     @Test
@@ -128,8 +184,8 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate).send(TOPIC, "order-1", payloadOf("order-1"));
-        verify(kafkaTemplate, never()).send(TOPIC, "order-2", payloadOf("order-2"));
+        // Tek gönderim oldu ve o da ilk kayıttı: ikinci kayıt öne geçmedi.
+        assertThat(onlySentRecord().key()).isEqualTo("order-1");
     }
 
     @Test
@@ -148,6 +204,6 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(byte[].class));
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 }
