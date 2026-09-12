@@ -21,33 +21,33 @@ scrape_configs:
     static_configs:
       - targets: ["api-gateway:9000"]
 
-  # Diğer servisler bu makinede (konteynerde değil) çalışıyor. Konteyner içinden
-  # "localhost" konteynerin kendisidir; ana makineye `host.docker.internal` ile
-  # ulaşılır. Bu adres compose'daki `extra_hosts` ile Linux'ta da tanımlı.
+  # Servislerin hepsi artık compose içinde (Faz 10). Konteyner adıyla erişiliyor
+  # ve yönetim portu dışarı açılmıyor — metrikler ağın dışından görünmez.
   #
-  # Bu asimetri geçicidir: servisler Faz 10'da compose'a alındığında hepsi
-  # konteyner adıyla kazınacak.
+  # Tek bir servisi geliştirme için makinede çalıştırıyorsan, o hedef `down`
+  # görünür. O durumda hedefi geçici olarak `host.docker.internal:90XX` yap;
+  # `extra_hosts` aşağıda tanımlı olduğu için Linux'ta da çalışır.
   - job_name: catalog-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["host.docker.internal:9081"]
+      - targets: ["catalog-service:9081"]
 
   - job_name: order-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["host.docker.internal:9082"]
+      - targets: ["order-service:9082"]
 
   - job_name: inventory-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["host.docker.internal:9084"]
+      - targets: ["inventory-service:9084"]
 
   - job_name: payment-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["host.docker.internal:9086"]
+      - targets: ["payment-service:9086"]
 
   - job_name: search-service
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["host.docker.internal:9087"]
+      - targets: ["search-service:9087"]

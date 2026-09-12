@@ -23,11 +23,15 @@ COPY inventory-service/pom.xml inventory-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY search-service/pom.xml search-service/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
-RUN mvn -B -pl catalog-service -am dependency:go-offline -DskipTests || true
+# BuildKit onbellek baglantisi: Maven deposu derlemeler ARASINDA korunur.
+# Olmadan her imaj derlemesi butun bagimliliklari yeniden indirir ve alti servisi
+# yerelde derlemek saatler surer. Onbellek imaja GIRMEZ; yalnizca derleme
+# sirasinda baglanir, yani calisma imaji buyumez.
+RUN --mount=type=cache,target=/root/.m2 mvn -B -pl catalog-service -am dependency:go-offline -DskipTests || true
 
 # Sonra kaynağı kopyala ve derle (testler imaj build'inde çalışmaz; onlar CI'da — Faz 8)
 COPY catalog-service/src catalog-service/src
-RUN mvn -B -pl catalog-service -am -DskipTests clean package
+RUN --mount=type=cache,target=/root/.m2 mvn -B -pl catalog-service -am -DskipTests clean package
 
 # ---------- 2) Çalışma aşaması ----------
 FROM eclipse-temurin:21-jre-jammy AS runtime

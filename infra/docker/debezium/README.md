@@ -173,7 +173,24 @@ PUBLICATION ... FOR ALL TABLES` çalıştırır: superuser ister ve `orders`,
 `order_lines` değişikliklerini de WAL'dan çözer — hepsi `table.include.list` ile
 sonradan elenir, yani boşa iş. `filtered` yalnızca izin listesindeki tabloyu yayınlar.
 
-**`heartbeat.interval.ms` = `10000`.** Her iki konektörde de var, aynı sınıf sorunu
+**Outbox konektörlerinde `heartbeat.interval.ms` YOK — bilerek.**
+Kalp atışı kaydının değeri bir `STRUCT`'tır; outbox konektörlerinin değer
+dönüştürücüsü ise `ByteArrayConverter` (payload ham Avro baytı olduğu için zorunlu).
+İkisi bağdaşmaz:
+
+```
+DataException: Invalid schema type for ByteArrayConverter: STRUCT
+```
+
+En sinsi tarafı: kalp atışı yalnızca **akış sessizken** üretilir. Mesaj akarken hiç
+oluşmaz — yani kısa entegrasyon testleri yeşil kalır, üretimde ilk sessiz anda görev
+ölür. Konektör `RUNNING` görünür, görevi `FAILED`.
+
+Bedeli: outbox sessizken ama veritabanının geri kalanı meşgulken WAL birikir.
+Telafisi replication slot gecikmesini **izlemek** (aşağıdaki işletim tuzağı).
+Katalog konektöründe kalp atışı **duruyor**: oranın değer dönüştürücüsü JSON.
+
+**`heartbeat.interval.ms` (katalog konektöründe) = `10000`.** Her iki konektörde de var, aynı sınıf sorunu
 çözüyor: kaynak sessizken konektörün kaydettiği konum ilerlemez.
 
 - Postgres'te sonuç WAL birikmesidir: outbox sessizken ama veritabanının geri kalanı

@@ -117,4 +117,25 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <!--
+              Bu eklenti EKSIKTI ve imaj hicbir zaman acilamiyordu:
+                  no main manifest attribute, in app.jar
+
+              spring-boot-maven-plugin, sade bir jar'i CALISTIRILABILIR jar'a
+              cevirir (repackage): bagimliliklari icine koyar ve Main-Class
+              bilgisini yazar. Olmadan `java -jar app.jar` calismaz.
+
+              Neden aylarca fark edilmedi? Testler jar'i hic kullanmaz; Spring
+              baglamini dogrudan ayaga kaldirirlar. CI de imaji DERLEDIGI icin
+              yesil kaliyordu; imaji DERLEMEK, onun ACILDIGINI kanitlamaz.
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

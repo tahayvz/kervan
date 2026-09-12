@@ -84,7 +84,7 @@ marked done unless its code and tests are in this repository.
 | 7 | **Resilience — circuit breakers where they belong, and nowhere else** | ✅ Done |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
 | 9 | Kubernetes + Helm | Planned |
-| 10 | Synthetic load — seeded data, sustained traffic, watching it from outside | Planned |
+| 10 | **Synthetic load — the whole system running at once, and the nine bugs that found** | ✅ Done |
 
 Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
 
@@ -539,6 +539,45 @@ and the answer was lost, the charge may already have happened, and retrying blin
 charges the customer twice. The decision is made from the *content* of the failure
 rather than its type, and the asymmetry is deliberate — a cancelled order costs far
 less than a double charge.
+
+---
+
+### Running it all at once, which is its own kind of test
+
+For nine phases the services only ever ran apart: in Testcontainers, or one at a time
+by hand. Phase 10 started all of them together for the first time, seeded data through
+the gateway, and drove load at it with k6.
+
+The numbers are modest on purpose. Sixty seconds, ten browsing users and five orders a
+second: 300 orders, no failures, p95 of 27ms, the outbox queue draining to zero.
+**These are not capacity figures** — the load generator and the system share one
+machine and one CPU, so the measurement would flatter itself. Saying that out loud is
+part of the measurement.
+
+What the run is actually for is a single trace. A customer gets their answer in
+**17ms**; the saga finishes behind them in **1.7 seconds**, across gateway, order,
+inventory and payment. 295 of 300 traces span more than one service, which is the
+proof that carrying trace context in an outbox column works under load rather than
+only in a test.
+
+One thing showed up that nobody arranged. Restarting services mid-run made consumers
+reprocess some messages, and fifteen minutes later the same events arrived again — a
+real duplicate delivery, in a system whose whole delivery guarantee is *at least once*.
+Nothing double-charged: 302 orders, 302 payments. The idempotency written in phase 4
+absorbed it silently, which is exactly what it was for and the first time it mattered.
+It also made that trace appear to last 938 seconds, so trace duration is not a latency
+measurement when redelivery is possible.
+
+**The phase's real output was nine bugs**, none of which 291 passing tests could catch:
+a Keycloak realm that never imported because JSON has no comments; a gateway jar that
+was never executable because the repackage plugin was missing; two services with no web
+server, so their business metrics were produced and never exposed; a Kafka address that
+was correct on the host and wrong inside the network; a Debezium heartbeat that kills a
+byte converter, but only when the stream goes quiet — so no short test ever sees it.
+
+They share one lesson: **building a thing does not prove it runs.** CI was green
+throughout, because CI built images rather than starting them. `scripts/smoke.sh` now
+checks the difference in seventeen assertions.
 
 ---
 

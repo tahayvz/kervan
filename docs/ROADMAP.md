@@ -294,7 +294,7 @@ probe, HPA ve resource limit'leriyle K8s'e deploy edilir.
 
 ---
 
-## Faz 10 — Sentetik yük ve gözlem (projenin kapanışı)
+## Faz 10 — Sentetik yük ve gözlem (projenin kapanışı)  ✅
 
 **Neden:** Bu proje bir ürün değil; teknolojileri ve çözdükleri problemleri deneyimlemek
 için var. Bir teknolojiyi "bağladım" demek ile "anladım" demek arasındaki fark, onu
@@ -319,8 +319,50 @@ yavaşlayınca.
 - **Deney defteri**: "şunu kırdık, şu oldu" notları. Bir servisi durdurmak, Kafka'yı
   kesmek, veritabanını yavaşlatmak.
 
-**Kazanım:** Kurulan her düzeneğin gerçekten çalıştığı — ya da hangi noktada
-yetmediği — ölçülmüş olur. Bu fazın çıktısı kod değil, **sayılar ve öğrenilenlerdir.**
+**Yapılanlar:** Beş servis daha compose'a alındı; sistem ilk kez **tamamı bir arada**
+çalıştı. `scripts/seed.sh` ürünleri **ağ geçidi üzerinden** oluşturur (doğrudan
+veritabanına yazsaydık kimlik doğrulama, yetki ve olay yayını hiç çalışmazdı).
+`scripts/smoke.sh` yığının gerçekten açıldığını 17 kontrolle doğrular.
+Yük `infra/docker/load/order-flow.js` ile k6 üzerinden.
+
+**Ölçülenler** (60 sn, 10 gezinen kullanıcı + sn'de 5 sipariş): 300 sipariş, hepsi
+başarılı; 1094 istek, hata yok; p95 **26.9 ms**; 302 saga `COMPLETED`, outbox
+kuyruğu 0'a indi. **Bu sayılar kapasite değildir** — yük üreteci ile sistem aynı
+makinede, aynı CPU'yu paylaşıyor.
+
+**Asıl çıktı tek bir iz.** Müşteri **17 ms**'de cevap alıyor; saga arkada **1.7
+saniye**de tamamlanıyor (gateway → order → inventory → payment → order). 300 izin
+295'i çok servisli: izi outbox sütununda taşıma düzeneği (ADR-0013) yük altında
+çalışıyor.
+
+Beklenmeyen bir gözlem: **tekrar teslimat gerçekten oldu** (servisler yeniden
+derlenirken tüketiciler bazı mesajları ikinci kez işledi) ve sistem bunu sessizce
+yuttu — 302 sipariş, 302 ödeme, çift çekim yok. Faz 4'teki idempotentlik ilk kez
+gerçekten devreye girdi. Yan etkisi: o izin süresi 938 saniye görünüyor, yani
+**tekrar teslimat iz süresini anlamsız kılıyor.**
+
+**Bu fazın asıl bulduğu şey dokuz hata.** Hiçbirini var olan 291 test
+yakalayamamıştı; hepsinin ortak dersi aynı: *bir şeyi derlemek, onun çalıştığını
+kanıtlamaz.* Ayrıntı: GELISTIRME-GUNLUGU B32–B34.
+
+| # | Hata |
+|---|---|
+| 1 | Keycloak'ın ARM imajı çöküyor (B20'nin üçüncü görülüşü) |
+| 2 | Realm JSON'undaki `_comment` içe aktarımı reddettiriyor — realm hiç yüklenmemiş |
+| 3 | Kullanıcı profili eksik → token alınamıyor |
+| 4 | `api-gateway`'de repackage eklentisi yok → jar çalıştırılabilir değil |
+| 5 | Kafka adresi 9092 → ağ içinden `localhost`'a yönleniyor (29092 olmalı) |
+| 6 | inventory/payment web uygulaması değil → metrikleri hiç yayınlanmıyor |
+| 7 | Debezium kalp atışı STRUCT, `ByteArrayConverter` bayt bekliyor → görev ölüyor |
+| 8 | `K6_` öneki k6'nın kendi öneki, senaryoları eziyor |
+| 9 | Konektör kaydı tohumlamadan **sonra** yapılınca veri indekse hiç düşmüyor |
+
+**Kazanım:** Kurulan her düzeneğin gerçekten çalıştığı ölçülmüş oldu. Bu fazın
+çıktısı kod değil, **sayılar ve öğrenilenlerdir.**
+
+**Açık kalan iş:** `inventory-service`'in stok **girişi** için bir ucu yok — stok
+yalnızca düşürülebiliyor. Tohumlama betiği bunu SQL ile geçiyor. Alan modelinde
+gerçek bir boşluk.
 
 ---
 

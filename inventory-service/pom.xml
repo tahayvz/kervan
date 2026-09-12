@@ -28,6 +28,27 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+        <!--
+          Bu servisin HTTP API'si YOK; is akisi tamamen Kafka uzerinden yurur.
+          Web sunucusu yalnizca GOZLEMLENEBILIRLIK icin var.
+
+          Olmadan actuator hicbir yerde yayinlanmaz: /actuator/prometheus diye
+          bir uc olusmaz, Prometheus hedefi surekli "down" gorunur ve bu servisin
+          is metrikleri (stok/odeme sonuclari) uretilir ama DISARI CIKMAZ.
+          Panolar bos kalir, hicbir yerde hata cikmaz.
+
+          Bu durum Faz 10'da, sistem ilk kez butunuyle calistirildiginda goruldu.
+          Faz 6'daki testler metrikleri MeterRegistry uzerinden okudugu icin
+          HTTP yolunu hic denememisti.
+
+          Is portu (server.port) hicbir sey sunmaz; actuator ayri yonetim
+          portunda durur (ADR-0014).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>

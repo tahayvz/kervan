@@ -255,7 +255,20 @@ services:
   # Kimlik saglayici — ADR-0001. order-service token uretmez, yalnizca dogrular.
   # dev modunda calisir: kalici depo yok, realm her acilista dosyadan yuklenir.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    # ARM surumundeki Java calisma zamani bu makinede cokuyor:
+    #   SIGILL ... java.lang.System.registerNatives ... linux-aarch64
+    # Buradaki ayarlardan bagimsiz; imaj yalnizca `java -version` calistirirken
+    # bile ayni sekilde coker. Teshis tek komut:
+    #   docker run --rm --entrypoint java <imaj> -version
+    #
+    # Bu depoda ayni sorun connect ve elasticsearch'te de cikmisti. Cozum ayni:
+    # amd64 surumunu SINDIRIM (digest) ile sabitle. Etiket mimariye gore cozulur,
+    # digest cozulmez -- yani "platform" satiri unutulsa bile yanlis mimari gelmez.
+    #
+    # Surum yukseltilirken digest de guncellenmeli:
+    #   docker manifest inspect quay.io/keycloak/keycloak:<surum>
+    image: quay.io/keycloak/keycloak@sha256:ecd43971114b0c764f8a3288dddab73f98cb473daccc4feaffe4dc14adeaf866
+    platform: linux/amd64
     container_name: kervan-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
@@ -270,8 +283,12 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 10s
+      # Emulasyonla calistigi icin acilis yerel mimariden yavas; pencere genis
+      # tutuldu. Dar birakilirsa saglikli bir Keycloak "unhealthy" sayilir ve
+      # ona bagli butun servisler hic baslamaz.
       timeout: 5s
-      retries: 20
+      retries: 40
+      start_period: 60s
     restart: unless-stopped
 
   # Tek giris noktasi. Kimlik dogrular, yetkiyi servisler denetler (ADR-0007).
@@ -299,6 +316,9 @@ services:
       # Konteyner icinden 'localhost' konteynerin KENDISIDIR; varsayilan adres
       # burada calismaz. Toplayiciya compose agindaki adiyla gidilir.
       KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOGGING_FILE_NAME: /var/log/kervan/api-gateway.json
+    volumes:
+      - ../../logs:/var/log/kervan
     restart: unless-stopped
 
   # --- Gozlemlenebilirlik: izleme (Faz 6) ---
@@ -415,6 +435,188 @@ services:
     depends_on:
       - loki
     restart: unless-stopped
+
+  # --- Uygulama servisleri (Faz 10) ---
+  #
+  # Faz 10'a kadar servisler bu makinede, elle calisiyordu. Sentetik yuk icin
+  # hepsinin AYNI ANDA ayakta olmasi gerekiyor; compose bunu tek komuta indiriyor.
+  #
+  # Hicbiri disariya PORT ACMAZ. On kapi yalnizca api-gateway'dir; Prometheus ve
+  # Alloy ag icinden erisir. Bu, ADR-0014'teki "actuator is portunda degil"
+  # kararinin dogal devami.
+  #
+  # Not: outbox yayincisi ACIK birakildi (varsayilan). Debezium yolu da calisir
+  # ama konektorlerin elle kaydedilmesini gerektirir; yuk denemesi icin tek
+  # komutla ayaga kalkan yol secildi. Karsilastirma: infra/docker/debezium/README.md
+
+  catalog-service:
+    build:
+      context: ../..
+      dockerfile: catalog-service/Dockerfile
+    container_name: kervan-catalog-service
+    # Saglik kosulu (service_healthy), "konteyner basladi" (service_started)
+    # demek degildir: baslamis ama henuz baglanti kabul etmeyen bir veritabanina
+    # baglanmaya calisan servis, gurultulu hatalarla acilir ve bazen hic acilmaz.
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      MONGODB_URI: mongodb://kervan:kervan@mongodb:27017/catalog?authSource=admin
+      SPRING_DATA_REDIS_HOST: redis
+      KERVAN_JWKS_URI: http://keycloak:8080/realms/kervan/protocol/openid-connect/certs
+      KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOGGING_FILE_NAME: /var/log/kervan/catalog-service.json
+    volumes:
+      - ../../logs:/var/log/kervan
+    restart: unless-stopped
+
+  order-service:
+    build:
+      context: ../..
+      dockerfile: order-service/Dockerfile
+    container_name: kervan-order-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orders
+      # 29092, 9092 DEGIL.
+      #
+      # Kafka'nin IKI dinleyicisi var: 29092 ag ICI, 9092 ana makine icin.
+      # 9092'ye baglanan bir istemci ilk el sikismadan sonra broker'in ILAN
+      # ETTIGI adrese yonlendirilir; o adres "localhost:9092"dir ve konteyner
+      # icinde localhost KONTEYNERIN KENDISIDIR. Sonuc:
+      #   Connection to node 1 (localhost/127.0.0.1:9092) could not be established
+      #
+      # Servisler bu makinede calisirken 9092 DOGRUYDU. Ag icine tasiyinca
+      # yanlis oldu -- adres degismedi, adresin ANLAMI degisti.
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KERVAN_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      KERVAN_JWKS_URI: http://keycloak:8080/realms/kervan/protocol/openid-connect/certs
+      KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOGGING_FILE_NAME: /var/log/kervan/order-service.json
+    volumes:
+      - ../../logs:/var/log/kervan
+    restart: unless-stopped
+
+  inventory-service:
+    build:
+      context: ../..
+      dockerfile: inventory-service/Dockerfile
+    container_name: kervan-inventory-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/inventory
+      # 29092, 9092 DEGIL.
+      #
+      # Kafka'nin IKI dinleyicisi var: 29092 ag ICI, 9092 ana makine icin.
+      # 9092'ye baglanan bir istemci ilk el sikismadan sonra broker'in ILAN
+      # ETTIGI adrese yonlendirilir; o adres "localhost:9092"dir ve konteyner
+      # icinde localhost KONTEYNERIN KENDISIDIR. Sonuc:
+      #   Connection to node 1 (localhost/127.0.0.1:9092) could not be established
+      #
+      # Servisler bu makinede calisirken 9092 DOGRUYDU. Ag icine tasiyinca
+      # yanlis oldu -- adres degismedi, adresin ANLAMI degisti.
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KERVAN_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOGGING_FILE_NAME: /var/log/kervan/inventory-service.json
+    volumes:
+      - ../../logs:/var/log/kervan
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ../..
+      dockerfile: payment-service/Dockerfile
+    container_name: kervan-payment-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/payment
+      # 29092, 9092 DEGIL.
+      #
+      # Kafka'nin IKI dinleyicisi var: 29092 ag ICI, 9092 ana makine icin.
+      # 9092'ye baglanan bir istemci ilk el sikismadan sonra broker'in ILAN
+      # ETTIGI adrese yonlendirilir; o adres "localhost:9092"dir ve konteyner
+      # icinde localhost KONTEYNERIN KENDISIDIR. Sonuc:
+      #   Connection to node 1 (localhost/127.0.0.1:9092) could not be established
+      #
+      # Servisler bu makinede calisirken 9092 DOGRUYDU. Ag icine tasiyinca
+      # yanlis oldu -- adres degismedi, adresin ANLAMI degisti.
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KERVAN_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOGGING_FILE_NAME: /var/log/kervan/payment-service.json
+    volumes:
+      - ../../logs:/var/log/kervan
+    restart: unless-stopped
+
+  search-service:
+    build:
+      context: ../..
+      dockerfile: search-service/Dockerfile
+    container_name: kervan-search-service
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+      # 29092, 9092 DEGIL.
+      #
+      # Kafka'nin IKI dinleyicisi var: 29092 ag ICI, 9092 ana makine icin.
+      # 9092'ye baglanan bir istemci ilk el sikismadan sonra broker'in ILAN
+      # ETTIGI adrese yonlendirilir; o adres "localhost:9092"dir ve konteyner
+      # icinde localhost KONTEYNERIN KENDISIDIR. Sonuc:
+      #   Connection to node 1 (localhost/127.0.0.1:9092) could not be established
+      #
+      # Servisler bu makinede calisirken 9092 DOGRUYDU. Ag icine tasiyinca
+      # yanlis oldu -- adres degismedi, adresin ANLAMI degisti.
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      LOGGING_FILE_NAME: /var/log/kervan/search-service.json
+    volumes:
+      - ../../logs:/var/log/kervan
+    restart: unless-stopped
+
+  # Yuk ureteci. PROFILE ARKASINDA: `up -d` ile kendiliginden calismaz, cunku
+  # yuk uretmek acikca istenen bir eylemdir.
+  #   docker compose --profile load run --rm k6
+  k6:
+    image: grafana/k6:0.58.0
+    container_name: kervan-k6
+    profiles: ["load"]
+    volumes:
+      - ./load:/scripts:ro
+    environment:
+      KERVAN_GATEWAY: http://api-gateway:8000
+      KERVAN_KEYCLOAK: http://keycloak:8080
+    command: ["run", "/scripts/order-flow.js"]
+    depends_on:
+      - api-gateway
 
 volumes:
   postgres-data:
