@@ -99,7 +99,7 @@ spec:
               path: /actuator/health/readiness
               port: management
             periodSeconds: 3
-            failureThreshold: 40   # ~120 sn acilis payi
+            failureThreshold: {{ $root.Values.defaults.startupFailureThreshold }}
 
           # HAZIR MI: trafik alabilir mi? Bagimliligi yoksa trafik KESILIR ama
           # pod OLDURULMEZ.

@@ -48,6 +48,13 @@ defaults:
   # Bekleyen isler icin sure taniyor. application.yml'deki
   # timeout-per-shutdown-phase (25sn) bundan KISA olmali.
   terminationGracePeriodSeconds: 30
+  # startupProbe'un kac kez denemesi (periyot 3sn). 40 x 3 = ~120sn acilis payi.
+  #
+  # Bu deger ORTAMA gore degisir, koda gore degil: dizustunde alti JVM rahat
+  # aciliyor, CI runner'inda dort cekirdek uzerinde alti JVM + Kafka + Elasticsearch
+  # ayni anda aciliyor ve ilk baslangic belirgin yavasliyor. Kod dogru olsa bile
+  # pod'un hazir olamamasi is kirar. CI icin values-ci.yaml bunu yukseltiyor.
+  startupFailureThreshold: 40
 
 services:
   api-gateway:
@@ -97,3 +104,7 @@ services:
 # baglardi.
 infra:
   enabled: true
+  # Elasticsearch AYRI anahtar: bazi kumelerde calistirilamiyor (gerekcesi
+  # infra.yaml'da). Kapatilirsa search-service de kapatilmali; yoksa servis
+  # acilirken Elasticsearch'e baglanamayip hic baslamaz.
+  elasticsearch: true

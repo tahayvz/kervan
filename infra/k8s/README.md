@@ -1,4 +1,4 @@
-# Kubernetes (Faz 9)
+# Kubernetes (Faz 9) ve dağıtım doğrulaması (Faz 8)
 
 Altı servis tek bir Helm paketiyle kuruluyor. Yerel doğrulama **kind** ile:
 kümeyi Docker konteyneri olarak kurar, iş bitince siler.
@@ -20,7 +20,32 @@ kubectl get pods -w
 
 Ağ geçidi: `curl http://localhost:8000/api/v1/products`
 
+Doğrulama: `scripts/smoke-k8s.sh`
+
 Silme: `kind delete cluster --name kervan`
+
+## Aynısı CI'da da koşuyor (Faz 8, ADR-0018)
+
+Yukarıdaki adımların hepsi her commit'te otomatik yapılıyor: küme kurulur, imajlar
+yüklenir, paket uygulanır, `scripts/smoke-k8s.sh` koşar, küme silinir. Amaç tek bir
+boşluğu kapatmak — **CI imajı derliyordu ama çalıştırmıyordu**, ve Faz 9 ile 10'da
+çıkan hataların çoğu tam oradan geliyordu.
+
+**CI'daki tek fark:** orada hiçbir şey kapatılmıyor. Runner amd64 olduğu için
+Elasticsearch ve `search-service` de açılıyor (`values-ci.yaml`), yani altı imajın
+altısı da çalıştırılarak doğrulanıyor. Bu dizüstünde mümkün değil.
+
+**`smoke.sh` ile `smoke-k8s.sh` neden ayrı:** İlki compose'a bağlı — `docker exec`
+çağırıyor, Keycloak'tan token istiyor, Prometheus/Grafana/Loki/Jaeger'ı `localhost`'ta
+arıyor. Bu pakette bunların hiçbiri yok; o betiğin 17 kontrolünün 11'i daha ilk
+saniyede kırılırdı.
+
+**"Yeniden başlatma sayısı sıfır olmalı" bir kontrol DEĞİL.** İlk yazılışında öyleydi
+ve düzgün çalışan bir kümede kırıldı: order 4, payment 4, inventory 5 kez yeniden
+başlamıştı. Hiçbiri hata değil — aşağıdaki birinci maddenin doğrudan sonucu.
+Betik onun yerine iki ayrı soru soruyor: `OOMKilled` var mı (açılışta çökme `Error`
+ile biter, bellek sınırı aşımı `OOMKilled` ile), ve pod hazır olduktan **sonra**
+çöken var mı.
 
 ## Bu faz neyi doğruluyor, neyi doğrulamıyor
 
@@ -32,10 +57,11 @@ mu; problar doğru uçları gösteriyor mu; kaynak sınırları ve düzgün kapa
 Connect yok — ikisi de ağır ve bu makinede emülasyon gerektiriyor. Saga'nın
 gerçekten çalıştığı Faz 10'da compose üzerinde kanıtlandı.
 
-`search-service` yerel kümede **kapalı**: Elasticsearch'e bağlanamazsa hiç
+`search-service` **yerel** kümede kapalı: Elasticsearch'e bağlanamazsa hiç
 açılmıyor ve Elasticsearch'ün ARM imajı bu makinede çöküyor. Kubernetes'te imaj
-başına platform seçimi yok, kind düğümünün içinde de emülasyon yok. amd64 bir
-kümede satır kaldırılır ve servis normal kalkar.
+başına platform seçimi yok, kind düğümünün içinde de emülasyon yok. Bu bir makine
+kısıtı, kod kısıtı değil — nitekim CI'da (amd64) `values-ci.yaml` hiçbir şey
+kapatmıyor ve servis normal kalkıyor.
 
 ## Compose'dan Kubernetes'e geçerken değişen üç şey
 

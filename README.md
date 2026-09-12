@@ -83,6 +83,7 @@ marked done unless its code and tests are in this repository.
 | 6c | **Logs — structured to a file, Alloy ships them, one click from log to trace** | ✅ Done |
 | 7 | **Resilience — circuit breakers where they belong, and nowhere else** | ✅ Done |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
+| 8b | **CD — every commit builds a throwaway cluster, applies the chart, and smoke-tests it** | ✅ Done |
 | 9 | **Kubernetes + Helm — one chart, and the three things compose hid** | ✅ Done |
 | 10 | **Synthetic load — the whole system running at once, and the nine bugs that found** | ✅ Done |
 
@@ -579,6 +580,12 @@ They share one lesson: **building a thing does not prove it runs.** CI was green
 throughout, because CI built images rather than starting them. `scripts/smoke.sh` now
 checks the difference in seventeen assertions.
 
+And CI no longer stops at `docker build`. Every commit now stands up a throwaway
+Kubernetes cluster, applies the Helm chart for real, waits for the pods, and runs
+`scripts/smoke-k8s.sh` against them before tearing the cluster down (ADR-0018). The
+runner is amd64, so nothing is switched off there — all six images are verified by
+being **run**, including the one this laptop cannot start.
+
 ---
 
 ### Kubernetes, and the three things compose was hiding
@@ -708,7 +715,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Metrics | Prometheus + Grafana (dashboards as code) | ✅ |
 | Logs | Loki + Grafana Alloy | ✅ |
 | Orchestration | Kubernetes + Helm (verified on kind) | ✅ |
-| CI | GitHub Actions + CodeQL | ✅ |
+| CI/CD | GitHub Actions + CodeQL; every commit deployed to a throwaway kind cluster and smoke-tested | ✅ |
 
 Rationale for each choice, including the alternatives that were rejected:
 [docs/TECH-RADAR.md](docs/TECH-RADAR.md)

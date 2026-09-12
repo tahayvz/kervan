@@ -211,4 +211,65 @@ spec:
     # Service'te bir controller portu gorup quorum'u ona yonlendirebilir ve az
     # once cozulen kilitlenmeyi geri getirebilirdi.
     - { name: plaintext, port: 9092, targetPort: 9092 }
+
+{{- if .Values.infra.elasticsearch }}
+---
+{{/*
+  Elasticsearch — search-service'in okuma modeli (ADR-0010).
+
+  AYRI bir anahtarla aciliyor cunku HER KUMEDE CALISMIYOR. Imajin ARM surumundeki
+  Java calisma zamani bazi Mac'lerde ilk yerel cagrida cokuyor (B20) ve cozum
+  amd64 surumunu emulasyonla kosturmak. Compose'da bu mumkun: `platform` satiri
+  var. Kubernetes'te YOK — imaj basina platform secimi diye bir sey yok, kind
+  dugumunun icinde de emulasyon yok.
+
+  Yani: ARM dizustunde kapali (values-kind.yaml), amd64 CI runner'inda acik
+  (varsayilan). Kapaliyken search-service da kapali; acilirken Elasticsearch'e
+  baglanamazsa hic baslamiyor.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kervan-elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: elasticsearch }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: elasticsearch, app.kubernetes.io/part-of: kervan }
+    spec:
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+          env:
+            # Tek dugum: kume kurmuyoruz, arama indeksi turev bir veri.
+            - { name: discovery.type, value: "single-node" }
+            # Lokal/CI: kimlik dogrulama kapali. Uretimde asla boyle kullanilmaz.
+            - { name: xpack.security.enabled, value: "false" }
+            - { name: ES_JAVA_OPTS, value: "-Xms512m -Xmx512m" }
+            # Disk esikleri KAPALI.
+            #
+            # CI runner'inin diski dolu baslar (~%70). Elasticsearch flood-stage
+            # esigini asinca indeksleri SESSIZCE salt-okunur yapar: yazma 200
+            # yerine 429 doner, arama calismaya devam eder ve is yesil gorunur.
+            # Tek dugumlu, atilacak bir kumede esiklerin koruyacagi bir sey yok.
+            - { name: cluster.routing.allocation.disk.threshold_enabled, value: "false" }
+          ports: [{ containerPort: 9200 }]
+          readinessProbe:
+            httpGet: { path: /_cluster/health, port: 9200 }
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 30
+          resources:
+            requests: { cpu: 200m, memory: 1Gi }
+            limits: { memory: 1536Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kervan-elasticsearch }
+spec:
+  selector: { app.kubernetes.io/name: elasticsearch }
+  ports: [{ port: 9200, targetPort: 9200 }]
+{{- end }}
 {{- end }}

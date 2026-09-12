@@ -261,20 +261,42 @@ cevap alıyor, kesici durumu Faz 6 panosunda görünüyor.
 
 ---
 
-## Faz 8 — CI/CD (GitHub Actions)  ✅ (kısmi: CI tamam, CD planlı)
+## Faz 8 — CI/CD (GitHub Actions)  ✅
 
 **Neden:** "Bende çalışıyordu" bir mühendislik cevabı değildir. Her commit otomatik
-derlenmeli, test edilmeli, taranmalı ve imaj üretmeli.
+derlenmeli, test edilmeli, taranmalı ve imaj üretmeli — **ve o imajın açıldığı
+gösterilmeli.**
 
-**Ne inşa edilecek:**
-- **GitHub Actions** pipeline (ücretsiz runner):
-  - build + unit + Testcontainers integration test
-  - kod kalite/güvenlik: OWASP dependency-check / Trivy imaj taraması
-  - Docker imajı build & (opsiyonel) GHCR'a push
-- Matrix build, cache, PR gate
+**Ne inşa edildi (8a — CI):**
+- **GitHub Actions** pipeline: build + birim + Testcontainers entegrasyon testleri
+- CodeQL taraması
+- Matris ile altı imajın paralel derlenmesi, Maven önbelleği, PR kapısı
 
-**Kazanım:** Her PR'da Testcontainers testleri, bağımlılık güvenlik taraması ve imaj
-build eden bir Actions pipeline'ı çalışır; kırmızı build merge edilemez.
+**Ne inşa edildi (8b — CD doğrulaması, ADR-0018):**
+- Her commit'te **atılacak bir kind kümesi** kurulur, Helm paketi **gerçekten
+  uygulanır**, pod'ların hazır olması beklenir, `scripts/smoke-k8s.sh` koşar ve
+  küme silinir.
+- İmajlar matris işinden **iş çıktısı (artifact)** olarak taşınır. Tek makinede
+  yeniden derlemek ~30 dakika sürerdi (ölçüldü: 8+7+6+5+2+2 dk); bu yol ~2 dakika
+  ekliyor ve paralelliği koruyor.
+- **CI'da hiçbir şey kapatılmaz:** runner amd64 olduğu için Elasticsearch ve
+  `search-service` de açılıyor — yani altı imajın **altısı da** çalıştırılarak
+  doğrulanıyor. Yerel kümede bu mümkün değil (ARM, günlük B20).
+- Ucuz ön kapı: `helm lint` + üç değer dosyasıyla `helm template`.
+- İş kırılırsa pod listesi, olaylar, `describe` ve bütün logların (`--previous`
+  dâhil) çıktı olarak yüklenmesi.
+
+**Neden gerçek bir ortama dağıtım yok:** Dağıtılacak yer yok; elde tek sunucu var ve
+o başka bir üretim sitesini çalıştırıyor. GHCR'a imaj gönderme de eklenmedi —
+değerli ama *farklı* bir boşluğu kapatır, çalıştığını kanıtlamaz (ADR-0018).
+
+**Kazanım:** Faz 9 ve 10'da çıkan on yedi hatanın çoğunun ortak sebebi tek cümleydi:
+*CI imajı derliyor ama çalıştırmıyor.* O boşluk kapandı. Bedeli: CI süresi ~13
+dakikadan ~24 dakikaya çıktı.
+
+**Neyi doğrulamaz:** Uçtan uca sipariş akışını. Pakette Schema Registry, Debezium
+Connect ve Keycloak yok; saga burada kanıtlanmaz — o Faz 10'da compose üzerinde
+kanıtlandı.
 
 ---
 

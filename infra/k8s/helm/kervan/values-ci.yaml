@@ -1,0 +1,15 @@
+# CI icin farkliliklar (GitHub Actions, ubuntu-latest, amd64).
+#
+#   helm install kervan infra/k8s/helm/kervan -f infra/k8s/helm/kervan/values-ci.yaml
+#
+# Yerel kind'dan (values-kind.yaml) tek farki VAR ve o fark ONEMLI:
+# burada HICBIR SEY KAPATILMIYOR. Runner amd64 oldugu icin Elasticsearch ve
+# search-service de aciliyor; yani alti imajin ALTISI da calistirilarak
+# dogrulaniyor. Dizustunde bu mumkun degil (ARM).
+
+defaults:
+  # Runner'da dort cekirdek uzerinde alti JVM + Kafka + Elasticsearch ayni anda
+  # aciliyor. 80 x 3sn = ~240sn. Bu sure DOGRULUK degil, SABIR ayari: kod dogru
+  # olsa bile yavas acilan pod'u hazir sayilmadan olduren bir esik, isi
+  # sebepsiz kirmizi yapar.
+  startupFailureThreshold: 80

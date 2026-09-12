@@ -16,3 +16,10 @@ services:
     #
     # amd64 bir kumede (CI, bulut) bu satir kaldirilir ve servis normal kalkar.
     enabled: false
+
+# Elasticsearch de ayni sebeple kapali: ARM imaji bu makinede cokuyor, amd64
+# surumunu emulasyonla kosturmak ise kind dugumunun icinde MUMKUN DEGIL.
+# Ikisi birlikte kapanir; search-service acikken Elasticsearch olmazsa servis
+# hic baslamaz.
+infra:
+  elasticsearch: false
