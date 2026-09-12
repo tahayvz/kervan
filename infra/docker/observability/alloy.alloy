@@ -1,0 +1,58 @@
+// Grafana Alloy — log dosyalarini okur, Loki'ye tasir.
+//
+// Uygulama Loki'yi TANIMAZ. Log'u bir dosyaya yazar; oradan alip nereye
+// goturecegine karar vermek isletmenin isidir (ADR-0015). Boylece Loki'yi
+// degistirmek tek bir konteyner ayari degistirmek demektir.
+//
+// Not: Promtail bu isin eski aracidir ve kullanimdan kalkti; Alloy onun halefi.
+
+local.file_match "kervan" {
+	// Servisler bu makinede calisiyor ve JSON log'u depo kokundeki logs/
+	// klasorune yaziyor. compose o klasoru buraya baglar.
+	path_targets = [{"__path__" = "/var/log/kervan/*.json"}]
+	sync_period  = "5s"
+}
+
+loki.source.file "kervan" {
+	targets    = local.file_match.kervan.targets
+	forward_to = [loki.process.kervan.receiver]
+}
+
+loki.process "kervan" {
+	// Satir zaten JSON. Etikete donusecek alanlari cikariyoruz.
+	// Alan adlarinda nokta var ("log.level"), bu yuzden ifade tirnaklanir.
+	stage.json {
+		expressions = {
+			level     = "\"log.level\"",
+			service   = "\"service.name\"",
+			timestamp = "\"@timestamp\"",
+		}
+	}
+
+	// YALNIZCA bu ikisi etiket olur ve ikisinin de deger kumesi SONLUDUR.
+	// Iz kimligini etiket yapmak cazipti: her istek yeni bir deger uretir ve
+	// Loki her biri icin ayri bir akis acardi. Metrik tarafindaki kardinalite
+	// hatasinin birebir aynisi. Iz kimligi satirin icinde kalir; Grafana onu
+	// sorgu aninda cikarip Jaeger baglantisi uretir (datasources.yml).
+	stage.labels {
+		values = {
+			level   = "",
+			service = "",
+		}
+	}
+
+	// Zaman damgasi UYGULAMANIN yazdigi andir, Alloy'un okudugu an degil.
+	// Aksi halde toplayici bir sure durdugunda butun log'lar ayni ana yigilir.
+	stage.timestamp {
+		source = "timestamp"
+		format = "RFC3339"
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

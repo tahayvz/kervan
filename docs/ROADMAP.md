@@ -146,7 +146,7 @@ indeksiyle faceted search, Redis ile cache ve dağıtık kilit sağlanır.
 
 ---
 
-## Faz 6 — Gözlemlenebilirlik (Observability)  · 6a ✅ · 6b ✅ · 6c planlı
+## Faz 6 — Gözlemlenebilirlik (Observability)  ✅
 
 **Neden:** Mikroservislerde bir hata 5 servise yayılabilir. "Nerede, kaç ms takıldı?"
 sorusuna cevap veremezsen prod'da körsün. Üç ayak: **log, metrik, trace**.
@@ -155,7 +155,7 @@ sorusuna cevap veremezsen prod'da körsün. Üç ayak: **log, metrik, trace**.
 - **OpenTelemetry** ile enstrümantasyon (trace + metrik) — ✅ yapıldı (izleme)
 - **Jaeger**: dağıtık trace (istek servisler arası nasıl aktı) — ✅ yapıldı
 - **Prometheus** + **Grafana**: metrik toplama + dashboard'lar (RED) — ✅ yapıldı
-- **Loki**: merkezî log; trace-id ile log korelasyonu — 6c
+- **Loki**: merkezî log; trace-id ile log korelasyonu — ✅ yapıldı
 
 **6a'da yapılanlar (izleme):** Altı servise de `micrometer-tracing-bridge-otel` +
 OTLP dışa aktarıcı eklendi. Enstrümantasyon **kod içinde**; Java ajanı bilinçli
@@ -196,6 +196,23 @@ gerçek hata buldu: gecikme metriği yayıncının vazgeçtiği kayıtları say�
 zehirli mesaj alarmı kalıcı olarak çalar hâle getiriyordu), pano veritabanından
 okunan bir gauge'i kopyalar arasında topluyordu (üç kopyada değer üçe katlanırdı) ve
 Grafana veri kaynağını isimle arıyordu — panolar boş açılırdı.
+
+**6c'de yapılanlar (log):** Servisler log'u **dosyaya JSON** olarak yazıyor; konsol
+insan için okunur kalıyor. Taşımayı **Grafana Alloy** yapıyor, depo Loki (ADR-0015).
+Uygulama Loki'yi tanımıyor: log'un nereye gideceği bir işletme kararı, uygulama
+kararı değil. Aynı gerekçe metrikte de verilmişti.
+
+Asıl kazanç üç ayağın **tek kimlikle** birleşmesi: Grafana'daki türetilmiş alan log
+satırındaki `traceId` değerini yakalayıp Jaeger'a bağlıyor. Bir log satırından o
+isteğin tüm yolculuğuna tek tıkla geçiliyor.
+
+İz kimliği **bilerek etiket değil** — etiket olsaydı her istek Loki'de yeni bir akış
+açardı; metrik tarafında sebebi etiket yapmamakla önlediğimiz kardinalite sorununun
+aynısı. Etiketler yalnızca `service` ve `level`.
+
+Log alan adı iki ayrı dosya arasında sözleşme: biri Java, diğeri Grafana ayarı.
+Derleyici ikisini bağlamaz, bu yüzden `StructuredLoggingTest` depodaki **gerçek**
+Grafana ayarını okuyup desenini gerçek bir log satırına uyguluyor.
 
 **Kazanım:** OpenTelemetry ile uçtan uca trace context propagation sağlanır; bir
 isteğin hangi serviste kaç ms harcadığı Jaeger'da izlenir; Grafana'da RED

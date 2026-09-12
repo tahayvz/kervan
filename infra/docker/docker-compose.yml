@@ -11,8 +11,8 @@
 #           (eklendi; Postgres WAL). Mongo change streams için Mongo replica set
 #           moduna alınacak — sonraki adım.
 #   Faz 5 → Elasticsearch (eklendi) + Redis (eklendi)
-#   Faz 6 → Jaeger + OTel Collector + Prometheus + Grafana (eklendi).
-#           Loki + Alloy sonraki adim.
+#   Faz 6 → Jaeger + OTel Collector + Prometheus + Grafana + Loki + Alloy
+#           (hepsi eklendi).
 #
 # Çalıştırma:  docker compose -f infra/docker/docker-compose.yml up -d
 # Durdurma:    docker compose -f infra/docker/docker-compose.yml down
@@ -377,6 +377,43 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+      - loki
+    restart: unless-stopped
+
+  # --- Gozlemlenebilirlik: log (Faz 6c) ---
+  #
+  # Loki log METNINI indekslemez, yalnizca ETIKETLERI. Elasticsearch'ten farki
+  # budur: cok daha ucuzdur, bedeli sorgunun once etiketle daraltilmasidir.
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: kervan-loki
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./observability/loki.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  # Log dosyalarini okuyup Loki'ye tasir. Uygulama Loki'yi tanimaz (ADR-0015).
+  # Promtail bu isin eski aracidir ve kullanimdan kalkti; Alloy onun halefi.
+  alloy:
+    image: grafana/alloy:v1.7.1
+    container_name: kervan-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      # Depo kokundeki logs/ klasoru. Servisler JSON log'u buraya yazar.
+      - ../../logs:/var/log/kervan:ro
+      - alloy-data:/var/lib/alloy/data
+    ports:
+      - "12345:12345"
+    depends_on:
+      - loki
     restart: unless-stopped
 
 volumes:
@@ -385,3 +422,5 @@ volumes:
   kafka-data:
   elasticsearch-data:
   prometheus-data:
+  loki-data:
+  alloy-data:

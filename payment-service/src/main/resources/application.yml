@@ -124,3 +124,22 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+
+logging:
+  structured:
+    format:
+      # Dosyaya yazilan log JSON olur; konsol insan icin okunur kalir.
+      # Ayrim bilincli: konsolu GELISTIRICI okur, dosyayi MAKINE okur.
+      #
+      # ECS (Elastic Common Schema) hazir bir alan adi sozlugudur. Kendi
+      # adlarimizi uydurmak yerine yerlesik bir sozlesme kullaniliyor; toplayici
+      # ve Grafana o adlari zaten taniyor.
+      file: ecs
+  file:
+    # Toplayici (Alloy) bu dosyayi okur. Uygulama Loki'yi TANIMAZ: log'un nereye
+    # gidecegi bir isletme kararidir, uygulama karari degil (ADR-0015).
+    #
+    # Varsayilan calisma dizinine gore gorecelidir. Servisleri depo kokunden
+    # calistir ya da KERVAN_LOG_FILE ile tam yol ver:
+    #   infra/docker/observability/README.md
+    name: ${KERVAN_LOG_FILE:logs/payment-service.json}

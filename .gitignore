@@ -23,7 +23,14 @@ Thumbs.db
 
 # --- Logs / runtime ---
 *.log
+# Her seviyedeki logs/ klasoru yok sayilir (modullerde de olusuyor).
 logs/
+# ...ama depo kokundeki logs/ KLASORU dursun: Alloy onu baglar.
+# Sira onemli: once klasor geri alinir, sonra icerigi dislanir. Tersi
+# calismaz -- git, dislanmis bir klasorun icine hic bakmaz.
+!/logs/
+/logs/*
+!/logs/README.txt
 *.pid
 
 # --- Env / secrets (asla commit'lenmez) ---

@@ -80,7 +80,7 @@ marked done unless its code and tests are in this repository.
 | 5b | **Redis — cache and rate limiting** (no distributed lock; ADR-0011 says why) | ✅ Done |
 | 6a | **Distributed tracing — OpenTelemetry + Jaeger, and the trace survives the outbox** | ✅ Done |
 | 6b | **Metrics — Prometheus, Grafana, and an actuator that left the public port** | ✅ Done |
-| 6c | Logs — Loki, structured logging, trace correlation | Planned |
+| 6c | **Logs — structured to a file, Alloy ships them, one click from log to trace** | ✅ Done |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
 | 9 | Kubernetes + Helm | Planned |
@@ -480,6 +480,34 @@ reviewable instead of clicked into a database.
 
 ---
 
+### Logs: the click from a line to the whole journey
+
+Services write logs as JSON to a file and know nothing about Loki. Grafana Alloy
+reads the file and ships it. Where logs end up is an operations decision, not an
+application one — the same argument that settled metrics, and it means replacing
+the log store changes nothing in six services. It also means a Loki outage cannot
+reach the application: the file keeps being written and the collector catches up.
+
+The console stays human-readable. JSON goes only to the file, because the console is
+read by a person and the file is read by a machine.
+
+**The payoff is one click.** A log line carries the trace id of the request that
+wrote it, and Grafana's derived field turns it into a link into Jaeger — so a
+suspicious line becomes the full journey of that order across three services. That
+is the whole point of doing all three pillars: they are only worth their cost when
+one identifier joins them.
+
+The trace id is deliberately **not** a label. As a label, every request would open a
+new stream in Loki — the identical cardinality mistake that keeps failure reasons out
+of metric labels. Labels are `service` and `level`, both finite.
+
+That field name is a contract between two files that no compiler connects: one Java,
+one Grafana YAML. Rename it and nothing breaks loudly — the log still ships, the
+dashboard still loads, only the link to the trace quietly dies. So the test reads the
+**real** Grafana config out of the repo and applies its regex to a real log line.
+
+---
+
 ### The saga
 
 An order spans three services, and a distributed transaction across them does not scale.
@@ -568,7 +596,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Resilience | Resilience4j | planned |
 | Tracing | OpenTelemetry (Micrometer bridge) + Jaeger | ✅ |
 | Metrics | Prometheus + Grafana (dashboards as code) | ✅ |
-| Logs | Loki | planned |
+| Logs | Loki + Grafana Alloy | ✅ |
 | Orchestration | Kubernetes + Helm | planned |
 | CI | GitHub Actions + CodeQL | ✅ |
 

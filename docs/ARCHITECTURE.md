@@ -178,7 +178,7 @@ bu sayede iş kuralları test edilebilir ve teknoloji değişikliğine dayanıkl
 |---|---|---|
 | Trace | OpenTelemetry + Jaeger | İstek servisler arası nasıl aktı, nerede kaç ms? (✅) |
 | Metrik | Prometheus + Grafana | Hız, hata oranı, doygunluk (RED)? (✅) |
-| Log | Loki | Ne oldu, hangi trace-id ile? (planlı) |
+| Log | Loki (Alloy taşır) | Ne oldu, hangi trace-id ile? (✅) |
 
 Enstrümantasyon kod içinde yapılır (Micrometer köprüsü), Java ajanı ile değil —
 gerekçe ADR-0012'de. Span'ler doğrudan Jaeger'a değil bir **OTel Collector**'a
@@ -220,6 +220,17 @@ vermesi gerekmez, ve "servis ayakta mı" sorusunun cevabı `up` metriğiyle beda
 (iş portu + 1000) ve compose onu dışarı açmaz. Çerçevenin HTTP metriklerinin yanında
 iş metrikleri de yayınlanır — outbox gecikmesi, havada kalan saga sayısı, stok ve
 ödeme sonuçları. Karar kaydı: ADR-0014.
+
+### 7.3 Log dosyaya yazılır, taşımayı toplayıcı yapar
+
+Uygulama log'u dosyaya JSON olarak yazar ve **Loki'yi tanımaz**; Grafana Alloy
+dosyayı okuyup taşır (ADR-0015). Log deposunu değiştirmek uygulamada tek satır
+değiştirmez.
+
+Üç ayak tek kimlikle birleşir: log satırındaki `traceId`, Grafana'nın türetilmiş
+alanıyla yakalanıp Jaeger'a bağlanır. Etiketler yalnızca `service` ve `level`;
+iz kimliği etiket **değildir**, çünkü her istek yeni bir değer üretir ve sınırsız
+etiket Loki'yi metrik tarafındaki kardinalite sorununun aynısına sokar.
 
 ---
 

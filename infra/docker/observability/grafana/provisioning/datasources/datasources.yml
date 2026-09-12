@@ -20,3 +20,33 @@ datasources:
     # Grafana her açılışta bu tanımı günceller; elle yapılan değişiklikler silinir.
     # İstenen budur: kaynak depodur.
     editable: false
+
+  # Log deposu. Asil kazanc turetilmis alan (derived field): satirin ICINDEKI
+  # iz kimligi sorgu aninda cikarilip Jaeger baglantisina cevrilir. Boylece
+  # bir log satirindan o istegin butun yolculuguna tek tikla gecilir.
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          # Alan adi `traceId`; ECS'in `trace.id`'si DEGIL. Deger Micrometer'in
+          # MDC'sinden geliyor ve MDC anahtarlari oldugu gibi aktariliyor.
+          # Bu ad StructuredLoggingTest ile sabitlendi; oradan degisirse
+          # burasi da degismeli.
+          matcherRegex: '"traceId":"([a-f0-9]{32})"'
+          # $$ kacistir: Grafana provisioning dosyalarinda tek $ ortam
+          # degiskeni sayilir.
+          url: '$${__value.raw}'
+          datasourceUid: jaeger
+
+  # Iz deposu. Loki'deki baglanti buraya isaret ediyor.
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: false
