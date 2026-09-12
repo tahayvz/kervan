@@ -1,9 +1,23 @@
 server:
+  # --- Duzgun kapanma (Faz 9) ---
+  #
+  # Kubernetes pod'u kapatirken once SIGTERM gonderir, sure dolunca SIGKILL.
+  # Bu ayar YALNIZCA WEB SUNUCUSUNU ilgilendirir: islenmekte olan HTTP istegi
+  # yarida kesilmez, bitirilmesi beklenir.
+  #
+  # Kafka dinleyicileri ve outbox yayincisi bu ayara DEGIL, asagidaki
+  # spring.lifecycle.timeout-per-shutdown-phase suresine baglidir; onlar
+  # uygulama baglami kapanirken duzenli durur.
+  shutdown: graceful
   # 8080 Keycloak, 8081 catalog, 8082 order, 8083 Kafka Connect, 8084 inventory,
   # 8085 Schema Registry.
   port: 8086
 
 spring:
+  lifecycle:
+    # Bekleyen isler bu sure icinde bitirilmeye calisilir. Kubernetes tarafindaki
+    # terminationGracePeriodSeconds bundan UZUN olmali.
+    timeout-per-shutdown-phase: 25s
   application:
     name: payment-service
 
@@ -120,6 +134,27 @@ management:
       percentiles-histogram:
         http.server.requests: true
 
+  endpoint:
+    health:
+      # Kubernetes probe'lari icin iki AYRI uc acar:
+      #   /actuator/health/liveness   "surec kendini toparlayamaz halde mi?"
+      #                               degilse YENIDEN BASLAT
+      #   /actuator/health/readiness  "su an trafik alabilir mi?"
+      #                               degilse TRAFIGI KES
+      #
+      # DIKKAT: readiness grubu VARSAYILAN olarak yalnizca `readinessState`
+      # icerir -- veritabani, Kafka gibi BAGIMLILIKLAR DAHIL DEGILDIR. Yani
+      # veritabani erisilemezken bile bu uc UP doner.
+      #
+      # Bu BILINCLI. Bagimliliklari eklemek (group.readiness.include=...,db)
+      # bir veritabani sarsintisinda BUTUN pod'lari ayni anda trafikten
+      # cekerdi: hicbiri istek alamaz, servis tamamen kaybolur. Oysa kismi
+      # calisan bir servis, hic calismayandan iyidir.
+      #
+      # Ayni gerekce Faz 5'te Redis'i ag gecidinin sagligina dahil etmeme
+      # kararinda da vardi (ADR-0011).
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:

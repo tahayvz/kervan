@@ -1,0 +1,26 @@
+# Yerel Kubernetes kumesi (kind = Kubernetes IN Docker).
+#
+# Neden kind, Docker Desktop'in kendi Kubernetes'i degil?
+#   - Kume tek komutla kurulur ve tek komutla SILINIR. Kalici kaynak yemez.
+#   - Docker Desktop ayarina dokunmaz.
+#   - AYNI arac CI'da da calisir; yani paketin gercekten uygulandigi bir
+#     dogrulama adimi eklenebilir (Faz 8).
+#
+# Kurulum:
+#   kind create cluster --config infra/k8s/kind-cluster.yaml
+# Silme:
+#   kind delete cluster --name kervan
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kervan
+
+nodes:
+  - role: control-plane
+    # Tek dugum. Birden fazla dugum, dizustunde yalnizca RAM yer; bu projede
+    # dogrulanmak istenen sey dagitim degil, YAPILANDIRMANIN dogrulugu.
+    extraPortMappings:
+      # Ag gecidine disaridan erisim. NodePort 30080 -> makinede 8000.
+      - containerPort: 30080
+        hostPort: 8000
+        protocol: TCP

@@ -33,10 +33,17 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -pl inventory-service -am -DskipT
 FROM eclipse-temurin:21-jre-jammy AS runtime
 WORKDIR /app
 
-RUN groupadd -r kervan && useradd -r -g kervan kervan
+# UID/GID ACIKCA sabitleniyor.
+#
+# `useradd -r` numarayi kendi secer ve taban imaj degisirse numara da degisir.
+# Kubernetes tarafinda runAsNonRoot, kullanicinin root OLMADIGINI dogrulamak
+# icin SAYISAL bir UID ister; ad yazarsa dogrulayamaz ve pod hic baslamaz:
+#   "container has runAsNonRoot and image has non-numeric user (kervan)"
+RUN groupadd -r -g 10001 kervan && useradd -r -u 10001 -g kervan kervan
 
 COPY --from=build /workspace/inventory-service/target/inventory-service-*.jar app.jar
-USER kervan
+# Ad degil NUMARA. Yukaridaki gerekce.
+USER 10001:10001
 
 # Is trafigi 8084, actuator (saglik + metrik) 9084.
 # Yonetim portu uygulama tarafindan dinlenir ama compose onu

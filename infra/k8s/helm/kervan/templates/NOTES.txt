@@ -1,0 +1,16 @@
+Kervan kuruldu: {{ .Release.Name }} ({{ .Release.Namespace }})
+
+Pod'larin hazir olmasini bekle:
+  kubectl get pods -w
+
+Ag gecidi (NodePort {{ (index .Values.services "api-gateway").nodePort }}):
+  curl http://localhost:8000/api/v1/products
+
+Bir servisin saglik uclari (YONETIM portunda, is portunda degil):
+  kubectl exec deploy/kervan-order-service -- \
+    wget -qO- http://localhost:9082/actuator/health/readiness
+
+NOT: Acilista bazi pod'lar 1-2 kez yeniden baslar. Kubernetes'te `depends_on`
+yoktur; veritabani hazir olmadan acilan servis coker ve Kubernetes onu yeniden
+baslatir. Yakinsar. Bagimlilik sirasi burada bir DAGITIM meselesi degil,
+DAYANIKLILIK meselesidir.

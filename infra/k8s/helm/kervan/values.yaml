@@ -1,0 +1,99 @@
+# Kervan Helm degerleri.
+#
+# TASARIM: alti servis de AYNI sablondan uretilir. Servis basina ayri sablon
+# yazmak, alti dosyada ayni hatayi alti kez duzeltmek demekti; aralarindaki
+# gercek farklar (port, olcek, ortam degiskeni) burada, veri olarak durur.
+
+image:
+  repository: kervan
+  tag: local
+  # kind kumesine imajlar `kind load docker-image` ile ELDEN yuklenir; disaridan
+  # cekilmeye calisilmamali.
+  pullPolicy: IfNotPresent
+
+# Butun servislerin ortak ayari. Sir OLMAYAN degerler; sirlar secret.yaml'da.
+config:
+  kafkaBootstrap: kervan-kafka:9092
+  schemaRegistry: http://kervan-schema-registry:8081
+  jwksUri: http://kervan-keycloak:8080/realms/kervan/protocol/openid-connect/certs
+  otlpEndpoint: http://kervan-otel-collector:4318/v1/traces
+  traceSampleRate: "1.0"
+
+# Veritabani parolalari. GERCEK bir kurulumda bu dosyada DURMAZ:
+# --set ile ya da harici bir secret yoneticisiyle (Vault, Sealed Secrets,
+# External Secrets) verilir. Burada lokal kume icin acikca sahte.
+secrets:
+  postgresUser: kervan
+  postgresPassword: kervan
+  mongoUser: kervan
+  mongoPassword: kervan
+
+# Her servisin JVM'i konteyner sinirinin bu yuzdesini heap olarak alir.
+# Sinir verip bu ayari VERMEMEK klasik hatadir: JVM sinirdan habersiz kalir,
+# heap'i buyutur ve konteyner OOMKilled olur.
+javaOptions: "-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
+
+defaults:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      # CPU limiti BILEREK yok. CPU sikistirilabilir bir kaynaktir: limit
+      # koymak, bos duran CPU varken bile uygulamayi bekletir (throttling) ve
+      # JVM'de bu, uzun duraklamalar olarak gorunur. Bellek sikistirilamaz,
+      # onun limiti sart.
+      memory: 768Mi
+  # Bekleyen isler icin sure taniyor. application.yml'deki
+  # timeout-per-shutdown-phase (25sn) bundan KISA olmali.
+  terminationGracePeriodSeconds: 30
+
+services:
+  api-gateway:
+    port: 8000
+    managementPort: 9000
+    # Disariya acilan TEK servis.
+    nodePort: 30080
+    env:
+      KERVAN_CATALOG_URL: http://kervan-catalog-service:8081
+      KERVAN_ORDER_URL: http://kervan-order-service:8082
+      KERVAN_SEARCH_URL: http://kervan-search-service:8087
+      SPRING_DATA_REDIS_URL: redis://kervan-redis:6379
+
+  catalog-service:
+    port: 8081
+    managementPort: 9081
+    env:
+      SPRING_DATA_REDIS_HOST: kervan-redis
+
+  order-service:
+    port: 8082
+    managementPort: 9082
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://kervan-postgres:5432/orders
+
+  inventory-service:
+    port: 8084
+    managementPort: 9084
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://kervan-postgres:5432/inventory
+
+  payment-service:
+    port: 8086
+    managementPort: 9086
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://kervan-postgres:5432/payment
+
+  search-service:
+    port: 8087
+    managementPort: 9087
+    env:
+      SPRING_ELASTICSEARCH_URIS: http://kervan-elasticsearch:9200
+
+# Lokal kume icin en kucuk altyapi. Uretimde BUNLAR CHART'IN PARCASI OLMAZ:
+# veritabani ve Kafka ya yonetilen bir hizmettir ya da kendi chart'indadir.
+# Uygulamayla ayni pakette olmalari, uygulama surumunu veritabani surumune
+# baglardi.
+infra:
+  enabled: true

@@ -83,7 +83,7 @@ marked done unless its code and tests are in this repository.
 | 6c | **Logs — structured to a file, Alloy ships them, one click from log to trace** | ✅ Done |
 | 7 | **Resilience — circuit breakers where they belong, and nowhere else** | ✅ Done |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
-| 9 | Kubernetes + Helm | Planned |
+| 9 | **Kubernetes + Helm — one chart, and the three things compose hid** | ✅ Done |
 | 10 | **Synthetic load — the whole system running at once, and the nine bugs that found** | ✅ Done |
 
 Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -581,6 +581,43 @@ checks the difference in seventeen assertions.
 
 ---
 
+### Kubernetes, and the three things compose was hiding
+
+Six services ship as one Helm chart rendered from a single template, with the real
+differences between them — ports, a few environment variables — living as data in
+`values.yaml`. Per-service charts would have meant fixing the same mistake six times.
+Databases and Kafka are deliberately **not** in the chart: bundled with the
+application, the application's version becomes tied to the database's.
+
+It was applied to a real cluster (kind) rather than only linted, and the measurement
+that matters is the rollout: **250 of 250 requests returned 200 while pods were being
+replaced**. That is not luck, it is three things working together — a readiness probe
+so the new pod takes traffic only when it can serve, graceful shutdown so the old one
+finishes what it started, and `maxUnavailable: 0` so the old pod outlives the new
+one's readiness. Remove any one and there is a gap.
+
+Three things broke on the way, and each is a difference compose papers over.
+
+**There is no `depends_on`.** Every pod starts at once, so three services crashed
+against a database that was not listening yet — and then healed themselves after a
+restart or two. Dependency order in Kubernetes is not a deployment concern, it is a
+resilience one; CrashLoopBackOff during startup is normal and self-correcting.
+
+**A Service only routes to *ready* pods.** Kafka's KRaft controller address was
+written as the service name, which deadlocked it: it had to reach the controller to
+become ready, and the Service would not publish it until it was. The same name in
+compose resolves straight to the container, health or not. Same value, different
+meaning — which is the shape most migration bugs take.
+
+**Health is two questions, not one.** `liveness` means *restart me*; `readiness` means
+*stop sending traffic*. A database blip should trip the second and never the first,
+because restarting a pod does not bring a database back — it only adds a second
+problem. The probes point at the management port, which is what separating that port
+in phase 6 quietly bought: probe traffic never passes through the rate limiter or
+authentication.
+
+---
+
 ### The saga
 
 An order spans three services, and a distributed transaction across them does not scale.
@@ -670,7 +707,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Tracing | OpenTelemetry (Micrometer bridge) + Jaeger | ✅ |
 | Metrics | Prometheus + Grafana (dashboards as code) | ✅ |
 | Logs | Loki + Grafana Alloy | ✅ |
-| Orchestration | Kubernetes + Helm | planned |
+| Orchestration | Kubernetes + Helm (verified on kind) | ✅ |
 | CI | GitHub Actions + CodeQL | ✅ |
 
 Rationale for each choice, including the alternatives that were rejected:

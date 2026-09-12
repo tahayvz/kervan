@@ -1,0 +1,14 @@
+# Butun servislerin paylastigi, sir OLMAYAN ayarlar.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kervan-config
+  labels:
+    app.kubernetes.io/part-of: kervan
+data:
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.config.kafkaBootstrap | quote }}
+  KERVAN_SCHEMA_REGISTRY_URL: {{ .Values.config.schemaRegistry | quote }}
+  KERVAN_JWKS_URI: {{ .Values.config.jwksUri | quote }}
+  KERVAN_OTLP_ENDPOINT: {{ .Values.config.otlpEndpoint | quote }}
+  KERVAN_TRACE_SAMPLE_RATE: {{ .Values.config.traceSampleRate | quote }}
+  JAVA_TOOL_OPTIONS: {{ .Values.javaOptions | quote }}

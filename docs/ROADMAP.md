@@ -278,16 +278,56 @@ build eden bir Actions pipeline'ı çalışır; kırmızı build merge edilemez.
 
 ---
 
-## Faz 9 — Kubernetes + Helm
+## Faz 9 — Kubernetes + Helm  ✅
 
 **Neden:** Compose lokal içindir; kurumsal deploy Kubernetes'tir. Bir lead
 "Spring Boot'u K8s'e nasıl deploy edersin?" sorusuna uygulamalı cevap verebilmeli.
 
-**Ne inşa edilecek:**
-- Her servis için **Helm chart** (Deployment, Service, ConfigMap, Secret, Ingress)
-- **HPA** (Horizontal Pod Autoscaler), resource limits/requests
-- Liveness/readiness probe'ları (Spring Actuator)
-- **Kind/Minikube** ile lokal cluster üzerinde uçtan uca çalıştırma
+**Ne inşa edildi:**
+- **Tek Helm paketi**, altı servis aynı şablondan (ADR-0017). Servis başına ayrı
+  paket, altı dosyada aynı hatayı altı kez düzeltmek olurdu.
+- Liveness/readiness/startup probe'ları — **yönetim portunda** (Faz 6b'nin karşılığı)
+- Resource requests + bellek limiti; **CPU limiti bilerek yok**
+- Düzgün kapanma (graceful shutdown) + açıkça yazılmış güncelleme stratejisi
+- **kind** ile gerçekten uygulandı ve çalıştırıldı
+- HPA yapılmadı: tek düğümlü bir denemede ölçeklenecek bir şey yok; metrics-server
+  ve gerçek yük olmadan HPA yazmak, çalıştığı hiç görülmeyen yapılandırma olurdu
+
+**Ölçüldü:** 9 pod'un 9'u hazır; ağ geçidi NodePort'tan cevap veriyor; servisler
+birbirini DNS ile buluyor; **güncelleme sırasında 250 isteğin 250'si 200 döndü**
+(kesintisiz güncelleme = readiness probe + düzgün kapanma + `maxUnavailable: 0`).
+
+**Compose'dan gelirken çıkan üç hata** (günlük A33, B35):
+
+| Hata | Sebep |
+|---|---|
+| Üç servis açılışta çöktü | Kubernetes'te `depends_on` yok; hepsi aynı anda başlar. Yeniden başlatarak **yakınsadı** — burada sıra bir *dağıtım* değil *dayanıklılık* meselesi |
+| Kafka hiç hazır olmadı | KRaft controller adresi olarak **servis adı** yazılmıştı; Service yalnızca *hazır* pod'lara yönlendirdiği için kilitlendi. Compose'da aynı ad doğrudan konteynere çözülüyordu |
+| Kafka açılmadı | `CLUSTER_ID` serbest metin değil: base64url ile tam 16 bayt olmalı. Compose'daki değer tesadüfen 22 karakterdi |
+
+**Kendi incelemem sekiz bulgu çıkardı**; ikisi gerçek hataydı:
+
+- **Yönetim portu dışarı açılmıştı.** Kubernetes, `NodePort` tipindeki bir
+  Service'in **her** portuna düğüm portu atar — pinlenmemiş olana rastgele bir
+  tane. Ölçüldü: yönetim portu 30276 almıştı, yani Faz 6b'de verilen ve ADR-0014'e
+  yazılan karar sessizce bozulmuştu. Çözüm: dışarı açılan Service ayrı ve
+  **yalnızca iş portunu** yayınlıyor.
+- **Belge gerçeği anlatmıyordu.** Yorumlar "veritabanı erişilemezken trafik
+  alınmaz" diyordu; Spring'in varsayılan readiness grubu ise yalnızca
+  `readinessState` içeriyor. Bağımlılık eklemek yerine **belge düzeltildi**:
+  eklenseydi bir veritabanı sarsıntısı bütün pod'ları aynı anda trafikten
+  çekerdi — Faz 5'teki Redis kararının aynısı.
+
+Ayrıca: `preStop` beklemesi (endpoint yayılımı SIGTERM ile yarışıyor),
+`securityContext` (runAsNonRoot + sayısal UID), portların tek kaynaktan verilmesi,
+NetworkPolicy'nin **yokluğunun** belgelenmesi.
+
+**Kapsam sınırı, açıkça:** bu faz **yapılandırmayı ve orkestrasyonu** doğrular,
+uçtan uca veri akışını değil. Kümede Schema Registry ve Debezium Connect yok
+(ağır, emülasyon gerektiriyor); saga'nın çalıştığı Faz 10'da compose üzerinde
+kanıtlandı. `search-service` yerel kümede kapalı — Elasticsearch'e bağlanamazsa
+hiç açılmıyor ve ARM imajı bu makinede çöküyor; Kubernetes'te imaj başına platform
+seçimi yok.
 
 **Kazanım:** Servisler Helm chart'larıyla parametrize edilir; readiness/liveness
 probe, HPA ve resource limit'leriyle K8s'e deploy edilir.

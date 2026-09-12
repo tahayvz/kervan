@@ -30,6 +30,7 @@ kararı veren kişi ekipten ayrıldığında gerekçe onunla birlikte gitmez.
 - [ADR-0014](0014-metrics-pull-and-management-port.md) — Metrikler çekilir, actuator ayrı portta
 - [ADR-0015](0015-logs-to-a-file-a-collector-ships-them.md) — Log dosyaya yazılır, taşımayı toplayıcı yapar
 - [ADR-0016](0016-where-circuit-breakers-go.md) — Devre kesici nereye konur ve nereye konmaz
+- [ADR-0017](0017-kubernetes-helm-single-chart.md) — Altı servis tek Helm paketinde, altyapı dışarıda
 
 ## Yeni ADR nasıl yazılır
 `NNNN-kisa-baslik.md` adıyla, `_template.md`'yi kopyalayarak.

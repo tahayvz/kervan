@@ -1,8 +1,22 @@
 server:
+  # --- Duzgun kapanma (Faz 9) ---
+  #
+  # Kubernetes pod'u kapatirken once SIGTERM gonderir, sure dolunca SIGKILL.
+  # Bu ayar YALNIZCA WEB SUNUCUSUNU ilgilendirir: islenmekte olan HTTP istegi
+  # yarida kesilmez, bitirilmesi beklenir.
+  #
+  # Kafka dinleyicileri ve outbox yayincisi bu ayara DEGIL, asagidaki
+  # spring.lifecycle.timeout-per-shutdown-phase suresine baglidir; onlar
+  # uygulama baglami kapanirken duzenli durur.
+  shutdown: graceful
   # 8080 Keycloak'ta; ag gecidi on kapi olarak 8000'de durur.
   port: 8000
 
 spring:
+  lifecycle:
+    # Bekleyen isler bu sure icinde bitirilmeye calisilir. Kubernetes tarafindaki
+    # terminationGracePeriodSeconds bundan UZUN olmali.
+    timeout-per-shutdown-phase: 25s
   application:
     name: api-gateway
 
@@ -170,6 +184,12 @@ management:
         include: health,info,prometheus
   endpoint:
     health:
+      probes:
+        # readiness grubu VARSAYILAN olarak yalnizca `readinessState` icerir;
+        # veritabani/Kafka gibi bagimliliklar DAHIL DEGILDIR ve bu bilinclidir.
+        # Eklenseydi bir veritabani sarsintisi butun pod'lari ayni anda
+        # trafikten cekerdi. Ayni gerekce ADR-0011'de de var.
+        enabled: true
       show-details: when-authorized
 
 logging:

@@ -42,10 +42,17 @@ FROM eclipse-temurin:21-jre-jammy AS runtime
 WORKDIR /app
 
 # Güvenlik: root olmayan kullanıcı ile çalış
-RUN groupadd -r kervan && useradd -r -g kervan kervan
+# UID/GID ACIKCA sabitleniyor.
+#
+# `useradd -r` numarayi kendi secer ve taban imaj degisirse numara da degisir.
+# Kubernetes tarafinda runAsNonRoot, kullanicinin root OLMADIGINI dogrulamak
+# icin SAYISAL bir UID ister; ad yazarsa dogrulayamaz ve pod hic baslamaz:
+#   "container has runAsNonRoot and image has non-numeric user (kervan)"
+RUN groupadd -r -g 10001 kervan && useradd -r -u 10001 -g kervan kervan
 
 COPY --from=build /workspace/order-service/target/order-service-*.jar app.jar
-USER kervan
+# Ad degil NUMARA. Yukaridaki gerekce.
+USER 10001:10001
 
 # Is trafigi 8082, actuator (saglik + metrik) 9082.
 # Yonetim portu uygulama tarafindan dinlenir ama compose onu

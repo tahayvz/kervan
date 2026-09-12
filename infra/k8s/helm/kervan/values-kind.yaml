@@ -1,0 +1,18 @@
+# Yerel kind kumesi icin farkliliklar.
+#   helm install kervan infra/k8s/helm/kervan -f infra/k8s/helm/kervan/values-kind.yaml
+
+services:
+  search-service:
+    # BU MAKINEDE calistirilamiyor, kodla ilgisi yok.
+    #
+    # search-service acilirken Elasticsearch'e baglanir; baglanamazsa hic
+    # baslamaz (UnknownHostException -> exit 1). CQRS okuma modeli icin bu
+    # savunulabilir: indeks yoksa servisin yapabilecegi bir sey yok.
+    #
+    # Elasticsearch'un ARM imaji ise bu makinede cokuyor (B20) ve cozumu amd64
+    # imajini emulasyonla calistirmak. Emulasyon Docker'da var ama KIND
+    # DUGUMUNUN ICINDE yok: Kubernetes'te imaj basina "platform" secimi de
+    # yoktur. Yani bu kumede Elasticsearch calistirilamiyor.
+    #
+    # amd64 bir kumede (CI, bulut) bu satir kaldirilir ve servis normal kalkar.
+    enabled: false
