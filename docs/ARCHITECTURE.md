@@ -177,7 +177,7 @@ bu sayede iş kuralları test edilebilir ve teknoloji değişikliğine dayanıkl
 | Ayak | Araç | Ne cevaplar? |
 |---|---|---|
 | Trace | OpenTelemetry + Jaeger | İstek servisler arası nasıl aktı, nerede kaç ms? (✅) |
-| Metrik | Prometheus + Grafana | Hız, hata oranı, doygunluk (RED/USE)? (planlı) |
+| Metrik | Prometheus + Grafana | Hız, hata oranı, doygunluk (RED)? (✅) |
 | Log | Loki | Ne oldu, hangi trace-id ile? (planlı) |
 
 Enstrümantasyon kod içinde yapılır (Micrometer köprüsü), Java ajanı ile değil —
@@ -209,6 +209,17 @@ POST /api/v1/orders ──► order-service ──► outbox (trace_parent)
 ```
 
 Karar kaydı: ADR-0013.
+
+### 7.2 Metrikler çekilir, actuator ayrı portta
+
+Uygulama metrik **göndermez**; `/actuator/prometheus` ucunu açar ve Prometheus gelip
+okur. Böylece Prometheus kapalıyken uygulamanın "biriktir mi, at mı" diye karar
+vermesi gerekmez, ve "servis ayakta mı" sorusunun cevabı `up` metriğiyle bedava gelir.
+
+Ölçüm ucu **iş trafiğinin portunda durmaz**: her serviste ayrı bir yönetim portu var
+(iş portu + 1000) ve compose onu dışarı açmaz. Çerçevenin HTTP metriklerinin yanında
+iş metrikleri de yayınlanır — outbox gecikmesi, havada kalan saga sayısı, stok ve
+ödeme sonuçları. Karar kaydı: ADR-0014.
 
 ---
 

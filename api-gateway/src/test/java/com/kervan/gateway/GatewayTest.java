@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -64,10 +65,25 @@ class GatewayTest {
         registry.add("KERVAN_CATALOG_URL", () -> "http://localhost:" + CATALOG.getPort());
         registry.add("KERVAN_ORDER_URL", () -> "http://localhost:" + ORDERS.getPort());
         registry.add("KERVAN_SEARCH_URL", () -> "http://localhost:" + SEARCH.getPort());
+        // 0 = rastgele port. Sabit bir port, aynı anda çalışan testlerde çakışırdı.
+        registry.add("management.server.port", () -> "0");
     }
 
     @Autowired
     private WebTestClient client;
+
+    /**
+     * Actuator ana portta değil, ayrı bir yönetim portunda ({@code management.server.port}).
+     * Test onu 0 yaparak rastgele bir porta bağlar; {@code @LocalManagementPort} o portu verir.
+     */
+    @LocalManagementPort
+    private int managementPort;
+
+    private WebTestClient management() {
+        return WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + managementPort)
+                .build();
+    }
 
     @BeforeEach
     void drainPendingRequests() throws InterruptedException {
@@ -200,9 +216,26 @@ class GatewayTest {
         }
 
         @Test
-        @DisplayName("Sağlık ucu tokensız açıktır")
+        @DisplayName("Sağlık ucu tokensız açıktır — yönetim portunda")
         void healthIsPublic() {
-            client.get().uri("/actuator/health").exchange().expectStatus().isOk();
+            management().get().uri("/actuator/health").exchange().expectStatus().isOk();
+        }
+
+        @Test
+        @DisplayName("Metrik ucu ana kapıda yok — geçerli tokenla bile")
+        void metricsAreNotServedOnThePublicPort() {
+            // Ağ geçidi dışarıya açılan tek süreçtir. Metrik ucu yönlendirme
+            // kimliklerini, istek hızlarını ve JVM ayrıntılarını yayar; 8000'de
+            // durması iç yapıyı dışarıya anlatmak olurdu.
+            //
+            // Tokensız istek zaten 401 alır. Asıl soru bu değil: GEÇERLİ bir
+            // tokenı olan bir müşteri de metrikleri görebiliyor mu?
+            client.get().uri("/actuator/prometheus")
+                    .header("Authorization", "Bearer " + TestJwtSupport.tokenFor("c-1", "CUSTOMER"))
+                    .exchange()
+                    // 404: bu portta actuator diye bir şey yok. Yönlendirme
+                    // kuralları yalnızca /api/v1/** yollarını tanır.
+                    .expectStatus().isNotFound();
         }
     }
 }

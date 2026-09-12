@@ -11,8 +11,8 @@
 #           (eklendi; Postgres WAL). Mongo change streams için Mongo replica set
 #           moduna alınacak — sonraki adım.
 #   Faz 5 → Elasticsearch (eklendi) + Redis (eklendi)
-#   Faz 6 → Jaeger + OTel Collector (eklendi). Prometheus + Grafana + Loki
-#           sonraki adim.
+#   Faz 6 → Jaeger + OTel Collector + Prometheus + Grafana (eklendi).
+#           Loki + Alloy sonraki adim.
 #
 # Çalıştırma:  docker compose -f infra/docker/docker-compose.yml up -d
 # Durdurma:    docker compose -f infra/docker/docker-compose.yml down
@@ -331,8 +331,57 @@ services:
       - "16686:16686"
     restart: unless-stopped
 
+  # --- Gozlemlenebilirlik: metrik (Faz 6b) ---
+  #
+  # Prometheus metrikleri KENDISI toplar (pull). Uygulama gondermez; bir uc acar ve
+  # Prometheus gelip okur. Boylece Prometheus kapaliyken uygulamanin "biriktir mi,
+  # at mi, bekle mi" diye karar vermesi gerekmez. Ayrica "servis ayakta mi"
+  # sorusunun cevabi bedava gelir: kazima basarisizsa `up` metrigi 0 olur.
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: kervan-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      # Lokal icin 7 gun yeter; disk dolmasin.
+      - "--storage.tsdb.retention.time=7d"
+      # Pano gelistirirken ayari yeniden yuklemek icin: POST /-/reload
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    # Servislerin cogu bu makinede calisiyor. macOS/Windows'ta Docker Desktop bu adi
+    # kendisi tanimlar; Linux'ta tanimlamaz, bu satir orada da calismasini saglar.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Panolar ve veri kaynagi KODDA tanimli (observability/grafana/provisioning).
+  # Elle eklenen bir pano Grafana'nin veritabaninda yasar: konteyner silinince gider
+  # ve bir sonraki kisi neyin nasil olculdugunu bilemez.
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: kervan-grafana
+    environment:
+      # Lokal gelistirme: giris ekrani yok, herkes izleyebilir. Uretimde asla.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   mongo-data:
   kafka-data:
   elasticsearch-data:
+  prometheus-data:

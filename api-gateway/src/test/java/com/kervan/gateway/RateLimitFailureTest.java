@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -65,10 +66,24 @@ class RateLimitFailureTest {
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.url", () -> "redis://localhost:" + deadPort);
         registry.add("KERVAN_CATALOG_URL", () -> "http://localhost:" + CATALOG.getPort());
+        registry.add("management.server.port", () -> "0");
     }
 
     @Autowired
     private WebTestClient client;
+
+    /**
+     * Actuator ana portta değil, ayrı bir yönetim portunda ({@code management.server.port}).
+     * Test onu 0 yaparak rastgele bir porta bağlar; {@code @LocalManagementPort} o portu verir.
+     */
+    @LocalManagementPort
+    private int managementPort;
+
+    private WebTestClient management() {
+        return WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + managementPort)
+                .build();
+    }
 
     @Test
     @DisplayName("istekler geçmeye devam eder")
@@ -81,6 +96,6 @@ class RateLimitFailureTest {
     void healthStaysUp() {
         // Redis sağlığa dahil edilseydi burası 503 dönerdi ve Kubernetes bu kopyayı
         // trafikten çıkarırdı — sayaç deposu yüzünden ön kapı kapanırdı.
-        client.get().uri("/actuator/health").exchange().expectStatus().isOk();
+        management().get().uri("/actuator/health").exchange().expectStatus().isOk();
     }
 }

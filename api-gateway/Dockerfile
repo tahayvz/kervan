@@ -39,5 +39,8 @@ RUN groupadd -r kervan && useradd -r -g kervan kervan
 COPY --from=build /workspace/api-gateway/target/api-gateway-*.jar app.jar
 USER kervan
 
-EXPOSE 8000
+# Is trafigi 8000, actuator (saglik + metrik) 9000.
+# Yonetim portu uygulama tarafindan dinlenir ama compose onu
+# disariya ACMAZ; Prometheus agin icinden okur.
+EXPOSE 8000 9000
 ENTRYPOINT ["java", "-jar", "app.jar"]

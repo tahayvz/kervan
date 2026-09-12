@@ -59,6 +59,18 @@ spring:
           jwk-set-uri: ${KERVAN_JWKS_URI:http://localhost:8080/realms/kervan/protocol/openid-connect/certs}
 
 management:
+  server:
+    # Actuator ANA KAPIDA DEGIL, ayri bir portta.
+    #
+    # Ag gecidi disariya acilan tek surectir. Metrik ucu yonlendirme kimliklerini,
+    # istek hizlarini, JVM ve baglanti havuzu ayrintilarini yayar; bunlarin 8000'de
+    # durmasi ic yapiyi disariya anlatmak olurdu. Compose bu portu disari ACMAZ;
+    # Prometheus agin icinden okur.
+    #
+    # Arka servisler icin ayni sorun yok: onlar zaten disariya acilmaz ve ag gecidi
+    # /actuator yolunu yonlendirmez.
+    port: ${KERVAN_MANAGEMENT_PORT:9000}
+
   # --- İzleme (tracing) ---
   # Bir isteğin servisler arasında nasıl aktığının kaydı. Her adım bir "span",
   # tüm zincir bir "trace". Gerekçe ve alternatifler: ADR-0012.
@@ -85,10 +97,23 @@ management:
     redis:
       enabled: false
 
+  metrics:
+    distribution:
+      # HTTP sürelerini histogram olarak yayınla.
+      #
+      # Bu satır olmadan Prometheus'ta `_bucket` serileri HİÇ oluşmaz ve
+      # `histogram_quantile(...)` boş döner. Pano "veri yok" gösterir, hiçbir hata
+      # çıkmaz — p95 grafiği sessizce boş kalır.
+      #
+      # Bedeli: her uç için ~70 ek zaman serisi. Servis sayısı arttıkça bu maliyet
+      # çarpılır; o noktada histogram yalnızca gerçekten gereken uçlarda açılır.
+      percentiles-histogram:
+        http.server.requests: true
+
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when-authorized

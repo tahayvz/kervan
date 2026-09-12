@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 interface SpringDataSagaRepository extends JpaRepository<OrderSagaEntity, String> {
@@ -21,4 +22,13 @@ interface SpringDataSagaRepository extends JpaRepository<OrderSagaEntity, String
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM OrderSagaEntity s WHERE s.orderId = :orderId")
     Optional<OrderSagaEntity> lockByOrderId(@Param("orderId") String orderId);
+
+    /**
+     * Duruma göre saga sayısı (metrik).
+     *
+     * <p>Durum başına ayrı sorgu yerine tek {@code GROUP BY}: durum sayısı arttıkça
+     * sorgu sayısı artmasın.
+     */
+    @Query("SELECT s.state, COUNT(s) FROM OrderSagaEntity s GROUP BY s.state")
+    List<Object[]> countByState();
 }

@@ -43,5 +43,8 @@ RUN groupadd -r kervan && useradd -r -g kervan kervan
 COPY --from=build /workspace/order-service/target/order-service-*.jar app.jar
 USER kervan
 
-EXPOSE 8082
+# Is trafigi 8082, actuator (saglik + metrik) 9082.
+# Yonetim portu uygulama tarafindan dinlenir ama compose onu
+# disariya ACMAZ; Prometheus agin icinden okur.
+EXPOSE 8082 9082
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -27,6 +27,7 @@ kararı veren kişi ekipten ayrıldığında gerekçe onunla birlikte gitmez.
 - [ADR-0011](0011-redis-cache-and-rate-limit.md) — Redis: önbellek ve hız sınırlama (dağıtık kilit değil)
 - [ADR-0012](0012-observability-instrumentation.md) — İzleme kod içinden (Java ajanı değil)
 - [ADR-0013](0013-trace-context-across-outbox.md) — İzleme bağlamı outbox satırında taşınır
+- [ADR-0014](0014-metrics-pull-and-management-port.md) — Metrikler çekilir, actuator ayrı portta
 
 ## Yeni ADR nasıl yazılır
 `NNNN-kisa-baslik.md` adıyla, `_template.md`'yi kopyalayarak.

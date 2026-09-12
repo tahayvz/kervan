@@ -1,10 +1,15 @@
 package com.kervan.gateway.config;
 
+import org.springframework.boot.actuate.autoconfigure.security.reactive.EndpointRequest;
+import org.springframework.boot.actuate.autoconfigure.web.server.ConditionalOnManagementPort;
+import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
 /**
@@ -62,4 +67,28 @@ class GatewaySecurityConfig {
 
         return http.build();
     }
+
+    /**
+     * Yönetim portundaki actuator uçları açıktır.
+     *
+     * <p>Ağ geçidi dışarıya açılan tek süreçtir; metrik ucunun ana kapıda durmaması
+     * bu yüzden önemli. Yönetim portunu koruyan şey ağdır: compose onu dışarı açmaz,
+     * Prometheus ağın içinden okur.
+     *
+     * <p>{@code @ConditionalOnManagementPort(DIFFERENT)} emniyet kilidi: iki port
+     * birleştirilirse bu bean kaybolur ve actuator yeniden ana zincire, yani kimlik
+     * doğrulamasına tabi olur. Tek satırlık bir port değişikliği metrikleri sessizce
+     * herkese açamaz.
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    @ConditionalOnManagementPort(ManagementPortType.DIFFERENT)
+    SecurityWebFilterChain managementFilterChain(ServerHttpSecurity http) {
+        http
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .authorizeExchange(exchange -> exchange.anyExchange().permitAll());
+        return http.build();
+    }
+
 }

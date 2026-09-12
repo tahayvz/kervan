@@ -34,5 +34,8 @@ RUN groupadd -r kervan && useradd -r -g kervan kervan
 COPY --from=build /workspace/payment-service/target/payment-service-*.jar app.jar
 USER kervan
 
-EXPOSE 8086
+# Is trafigi 8086, actuator (saglik + metrik) 9086.
+# Yonetim portu uygulama tarafindan dinlenir ama compose onu
+# disariya ACMAZ; Prometheus agin icinden okur.
+EXPOSE 8086 9086
 ENTRYPOINT ["java", "-jar", "app.jar"]

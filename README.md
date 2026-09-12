@@ -79,7 +79,8 @@ marked done unless its code and tests are in this repository.
 | 5a | **Search Service — Elasticsearch read model fed by catalogue CDC** | ✅ Done |
 | 5b | **Redis — cache and rate limiting** (no distributed lock; ADR-0011 says why) | ✅ Done |
 | 6a | **Distributed tracing — OpenTelemetry + Jaeger, and the trace survives the outbox** | ✅ Done |
-| 6b | Metrics and logs — Prometheus, Grafana, Loki | Planned |
+| 6b | **Metrics — Prometheus, Grafana, and an actuator that left the public port** | ✅ Done |
+| 6c | Logs — Loki, structured logging, trace correlation | Planned |
 | 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
 | 9 | Kubernetes + Helm | Planned |
@@ -438,6 +439,47 @@ library would overwrite the correct context with a plausible-looking wrong one.
 
 ---
 
+### Metrics: the number the count does not tell you
+
+Tracing answers "where did this request stall". It cannot answer "how often does
+this happen" — one trace is one example. So every service exposes
+`/actuator/prometheus` and Prometheus comes and reads it.
+
+**Pull, not push**, and the reason is about failure. If the application pushed, every
+service would have to decide what to do while the metrics backend is down: buffer,
+drop, or block. Nobody gets that right in six places. When the reader does the work,
+a dead collector costs nothing — and "is this service up?" is answered for free by
+`up`, a metric Prometheus produces itself rather than one the service claims about
+itself.
+
+Alongside the framework's RED metrics sit the business ones: rows waiting in the
+outbox **and the age of the oldest one**, rows the publisher gave up on, sagas in
+flight per state, stock and payment outcomes. The alert belongs on the age, not the
+count — a queue of one is fine unless that one has been sitting there for two hours.
+Failure *reasons* are deliberately not labels: reasons are free text, every distinct
+string becomes another time series, and that is how you kill a metrics store. Reasons
+live in logs.
+
+**Actuator moved off the business port.** Every service now serves it on its own port
+(business + 1000) that compose does not publish. The gateway is the one process
+exposed to the outside world, and a metrics endpoint hands out route ids, request
+rates, connection-pool internals and JVM detail. `@ConditionalOnManagementPort(DIFFERENT)`
+is the safety latch: merge the two ports back together and the bean that opens
+actuator up simply disappears, so the endpoints fall back under authentication
+instead of quietly becoming public.
+
+Reviewing my own work here found three real defects worth naming, because each was
+silent. The lag metric counted rows the publisher had permanently set aside, so a
+single poison message would have pinned the alert on forever until someone muted it.
+The dashboard summed a gauge every replica reads from the same database, so three
+replicas would have tripled it — a number that moves when you scale rather than when
+the system changes. And Grafana resolves datasources by uid while the dashboard asked
+for one by name, so every panel would have opened empty. Dashboards and datasources
+live in the repo (`infra/docker/observability`) precisely so mistakes like these are
+reviewable instead of clicked into a database.
+
+---
+
 ### The saga
 
 An order spans three services, and a distributed transaction across them does not scale.
@@ -525,7 +567,8 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Identity | Keycloak (OAuth2 / OIDC / JWT) | ✅ |
 | Resilience | Resilience4j | planned |
 | Tracing | OpenTelemetry (Micrometer bridge) + Jaeger | ✅ |
-| Metrics / logs | Prometheus, Grafana, Loki | planned |
+| Metrics | Prometheus + Grafana (dashboards as code) | ✅ |
+| Logs | Loki | planned |
 | Orchestration | Kubernetes + Helm | planned |
 | CI | GitHub Actions + CodeQL | ✅ |
 

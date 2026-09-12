@@ -39,5 +39,8 @@ RUN groupadd -r kervan && useradd -r -g kervan kervan
 COPY --from=build /workspace/catalog-service/target/catalog-service-*.jar app.jar
 USER kervan
 
-EXPOSE 8081
+# Is trafigi 8081, actuator (saglik + metrik) 9081.
+# Yonetim portu uygulama tarafindan dinlenir ama compose onu
+# disariya ACMAZ; Prometheus agin icinden okur.
+EXPOSE 8081 9081
 ENTRYPOINT ["java", "-jar", "app.jar"]

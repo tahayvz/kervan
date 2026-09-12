@@ -35,5 +35,8 @@ RUN groupadd -r kervan && useradd -r -g kervan kervan
 COPY --from=build /workspace/search-service/target/search-service-*.jar app.jar
 USER kervan
 
-EXPOSE 8087
+# Is trafigi 8087, actuator (saglik + metrik) 9087.
+# Yonetim portu uygulama tarafindan dinlenir ama compose onu
+# disariya ACMAZ; Prometheus agin icinden okur.
+EXPOSE 8087 9087
 ENTRYPOINT ["java", "-jar", "app.jar"]

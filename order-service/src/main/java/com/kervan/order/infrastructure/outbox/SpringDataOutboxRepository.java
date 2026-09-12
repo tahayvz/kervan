@@ -83,4 +83,45 @@ interface SpringDataOutboxRepository extends JpaRepository<OutboxEntity, UUID> {
     @Modifying
     @Query("DELETE FROM OutboxEntity o WHERE o.id IN :ids")
     int deleteByIds(@Param("ids") List<UUID> ids);
+
+    /**
+     * Gönderilmeyi bekleyen kayıt sayısı (metrik).
+     *
+     * <p>Filtre {@link #lockDeliverable} ile <b>aynı</b> olmak zorunda: yayıncının
+     * artık denemediği kayıtlar kuyruğun parçası değildir. Yalnızca
+     * {@code publishedAt IS NULL} sorulsaydı, kenara alınmış her kayıt sonsuza kadar
+     * "bekliyor" sayılırdı.
+     */
+    @Query("""
+            SELECT COUNT(o) FROM OutboxEntity o
+            WHERE o.publishedAt IS NULL AND o.attempts < :maxAttempts
+            """)
+    long countDeliverable(@Param("maxAttempts") int maxAttempts);
+
+    /**
+     * Bekleyen en eski kaydın zamanı; hiç bekleyen yoksa {@code null}.
+     *
+     * <p>Sayı tek başına yetmez: kuyrukta tek bir kayıt olabilir ama o kayıt iki
+     * saattir orada duruyor olabilir. Gecikmeyi gösteren şey yaştır.
+     *
+     * <p><b>Kenara alınmış kayıtlar buraya girmez.</b> Girseydi tek bir zehirli mesaj
+     * yaşı sonsuza kadar büyütürdü: kuyruk normal akarken gecikme alarmı sürekli
+     * çalar, susturulur, ve sonraki GERÇEK birikme kimsenin dikkatini çekmezdi.
+     * Onlar ayrıca {@link #countStuck} ile raporlanıyor.
+     */
+    @Query("""
+            SELECT MIN(o.occurredAt) FROM OutboxEntity o
+            WHERE o.publishedAt IS NULL AND o.attempts < :maxAttempts
+            """)
+    Instant oldestDeliverableOccurredAt(@Param("maxAttempts") int maxAttempts);
+
+    /**
+     * Deneme sınırına takılıp kenara alınmış kayıtlar. Bunlar kuyruğu tıkamaz ama
+     * kimse bakmazsa sessizce kaybolur; metrik onları görünür kılar.
+     */
+    @Query("""
+            SELECT COUNT(o) FROM OutboxEntity o
+            WHERE o.publishedAt IS NULL AND o.attempts >= :maxAttempts
+            """)
+    long countStuck(@Param("maxAttempts") int maxAttempts);
 }

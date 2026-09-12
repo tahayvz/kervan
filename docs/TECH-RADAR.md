@@ -161,10 +161,15 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   ama yalnızca gerçek çalıştırmada var olduğu için CI'da doğrulanamaz. Elendi;
   gerekçe ADR-0012'de.
 
-### Prometheus + Grafana + Loki
+### Prometheus + Grafana  ✅ (Loki planlı)
 - **Problem:** Metrik toplama, dashboard, alarm ve merkezî log.
-- **Neden:** Prometheus pull-tabanlı metrik + alertmanager; Grafana görselleştirme;
-  Loki "Prometheus-benzeri" log toplama, trace-id ile korelasyon. Üçü tek ekosistem.
+- **Neden:** Prometheus **pull** tabanlıdır: uygulama bir uç açar, Prometheus okur.
+  Gönderen taraf olsaydı, Prometheus kapalıyken uygulamanın "biriktir mi, at mı,
+  bekle mi" sorusunu çözmesi gerekirdi. Ayrıca `up` metriği "hedef cevap vermiyor"
+  sinyalini bedava verir. Grafana görselleştirir; panolar ve veri kaynağı **kodda**
+  tanımlı. Loki (planlı) log'u aynı ekosistemde toplar.
+- **Alternatif:** Push tabanlı OTLP metrik — izlerle tutarlı olurdu ama gönderim
+  başarısızlığı, kuyruk ve geri basınç her servise girerdi (ADR-0014).
 - **Alternatif:** ELK stack — Loki daha hafif ve Grafana ile daha entegre.
 
 ---

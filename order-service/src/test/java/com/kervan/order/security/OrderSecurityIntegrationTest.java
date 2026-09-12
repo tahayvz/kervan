@@ -163,16 +163,17 @@ class OrderSecurityIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("metrics ucu token ister")
-    void metricsEndpointShouldRequireAuthentication() {
+    @DisplayName("actuator iş portunda hiç yok")
+    void actuatorIsNotOnTheBusinessPort() {
+        // Ölçüm ve sağlık uçları ayrı bir yönetim portunda. Daha önce buradaydılar
+        // ve token isterlerdi; artık bu portta böyle bir uç yok.
+        //
+        // Fark önemli: "korunuyor" ile "orada değil" aynı şey değildir. İkincisinde
+        // yeni bir actuator ucu eklemek iş portunun güvenlik ayarını hiç
+        // ilgilendirmez — yanlışlıkla açılacak bir şey kalmaz.
         assertThat(rest.getForEntity("/actuator/metrics", String.class).getStatusCode())
-                .isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN);
-    }
-
-    @Test
-    @DisplayName("sağlık ucu token istemez")
-    void healthEndpointShouldBePublic() {
-        assertThat(rest.getForEntity("/actuator/health", String.class).getStatusCode())
-                .isEqualTo(HttpStatus.OK);
+                .isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN, HttpStatus.NOT_FOUND);
+        assertThat(rest.getForEntity("/actuator/prometheus", String.class).getStatusCode())
+                .isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN, HttpStatus.NOT_FOUND);
     }
 }

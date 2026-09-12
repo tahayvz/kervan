@@ -34,5 +34,8 @@ RUN groupadd -r kervan && useradd -r -g kervan kervan
 COPY --from=build /workspace/inventory-service/target/inventory-service-*.jar app.jar
 USER kervan
 
-EXPOSE 8084
+# Is trafigi 8084, actuator (saglik + metrik) 9084.
+# Yonetim portu uygulama tarafindan dinlenir ama compose onu
+# disariya ACMAZ; Prometheus agin icinden okur.
+EXPOSE 8084 9084
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -1,0 +1,22 @@
+# Veri kaynakları kodda tanımlı.
+#
+# Elle eklenen bir veri kaynağı Grafana'nın veritabanında yaşar: konteyner
+# silindiğinde gider ve bir sonraki kişi neyin nasıl bağlandığını bilemez.
+# Burada durduğunda depoda görünür ve her açılışta aynı şekilde kurulur.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    # uid ACIKCA verilir. Verilmezse Grafana rastgele bir uid uretir
+    # (ornegin PBFA97CFB590B2093) ve depodaki pano JSON'u ona referans veremez:
+    # her panel "Datasource not found" gosterir. Pano ile veri kaynagini
+    # birbirine baglayan sey isim degil UID'dir.
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    # Grafana her açılışta bu tanımı günceller; elle yapılan değişiklikler silinir.
+    # İstenen budur: kaynak depodur.
+    editable: false

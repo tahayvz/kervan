@@ -49,6 +49,19 @@ mongock:
 
 # Actuator — health/liveness/readiness (K8s probe'ları, Faz 9)
 management:
+  server:
+    # Actuator, is trafiginin portunda DEGIL; ayri bir yonetim portunda.
+    #
+    # Tek kural, istisnasiz: olcum ve saglik uclari is trafiginin portunu
+    # paylasmaz. Boylece "hangi uc acik, hangisi kapali" sorusu her serviste
+    # ayni cevabi verir ve yeni bir uc eklemek guvenlik ayari gozden gecirmeyi
+    # gerektirmez.
+    #
+    # Bu portu koruyan sey AG'dir, token degil: compose disari acmaz, Prometheus
+    # agin icinden okur. Dusman bir agda calisilacaksa buraya mTLS ya da kimlik
+    # dogrulama eklenir (ADR-0014).
+    port: ${KERVAN_MANAGEMENT_PORT:9081}
+
   # --- İzleme (tracing) ---
   # Bir isteğin servisler arasında nasıl aktığının kaydı. Her adım bir "span",
   # tüm zincir bir "trace". Gerekçe ve alternatifler: ADR-0012.
@@ -62,10 +75,23 @@ management:
       # Span'ler doğrudan Jaeger'a değil toplayıcıya (OTel Collector) gider.
       # Uygulama tek bir adres bilir; arkadaki sistem değişirse uygulama değişmez.
       endpoint: ${KERVAN_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    distribution:
+      # HTTP sürelerini histogram olarak yayınla.
+      #
+      # Bu satır olmadan Prometheus'ta `_bucket` serileri HİÇ oluşmaz ve
+      # `histogram_quantile(...)` boş döner. Pano "veri yok" gösterir, hiçbir hata
+      # çıkmaz — p95 grafiği sessizce boş kalır.
+      #
+      # Bedeli: her uç için ~70 ek zaman serisi. Servis sayısı arttıkça bu maliyet
+      # çarpılır; o noktada histogram yalnızca gerçekten gereken uçlarda açılır.
+      percentiles-histogram:
+        http.server.requests: true
+
   endpoints:
     web:
       exposure:
-        include: health, info, metrics
+        include: health, info, metrics, prometheus
   endpoint:
     health:
       probes:

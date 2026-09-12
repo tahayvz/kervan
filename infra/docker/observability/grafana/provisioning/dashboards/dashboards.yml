@@ -1,0 +1,15 @@
+# Panoların nereden yükleneceği. Pano JSON'ları depoda durur (dashboards klasörü).
+
+apiVersion: 1
+
+providers:
+  - name: kervan
+    orgId: 1
+    type: file
+    disableDeletion: false
+    # Dosya değişince Grafana panoyu yeniden yükler.
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

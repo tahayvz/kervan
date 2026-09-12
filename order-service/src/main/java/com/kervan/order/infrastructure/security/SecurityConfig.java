@@ -1,5 +1,10 @@
 package com.kervan.order.infrastructure.security;
 
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
+import org.springframework.boot.actuate.autoconfigure.web.server.ConditionalOnManagementPort;
+import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.context.annotation.Bean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -48,6 +53,10 @@ class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Actuator normalde bu portta DEĞİL, ayrı bir yönetim
+                        // portunda (bkz. application.yml). Bu kural, iki port tek
+                        // porta indirilirse sağlık ucunun kapanmaması için duruyor:
+                        // kapanırsa yük dengeleyici servisi ölü sanır.
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers(API_DOCS_PATHS).access(
                                 (authentication, context) ->
@@ -67,4 +76,27 @@ class SecurityConfig {
 
         return http.build();
     }
+
+    /**
+     * Yönetim portundaki actuator uçları açıktır.
+     *
+     * <p>Burayı koruyan şey ağdır, token değil: bu port dışarıya açılmaz, Prometheus
+     * ağın içinden okur. Kubernetes'te de aynı desen kullanılır — probe ve kazıma
+     * (scrape) trafiği iş trafiğiyle aynı kapıdan geçmez.
+     *
+     * <p>{@code @ConditionalOnManagementPort(DIFFERENT)} bir emniyet kilidi: biri
+     * yönetim portunu iş portuyla birleştirirse bu bean <b>kaybolur</b> ve actuator
+     * yeniden ana zincirin kurallarına, yani kimlik doğrulamasına tabi olur. Aksi
+     * hâlde tek satırlık bir port değişikliği metrik ucunu sessizce herkese açardı.
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    @ConditionalOnManagementPort(ManagementPortType.DIFFERENT)
+    SecurityFilterChain managementFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher(EndpointRequest.toAnyEndpoint())
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
+    }
+
 }

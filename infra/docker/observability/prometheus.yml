@@ -1,0 +1,53 @@
+# Prometheus — metrikleri servislerden KENDISI toplar (pull).
+#
+# Uygulama metrik göndermez; bir ucu açar ve Prometheus gelip okur. Sebep: gönderen
+# taraf olsaydı, Prometheus kapalıyken uygulama ne yapacağına karar vermek zorunda
+# kalırdı (biriktir? at? bekle?). Okuyan taraf olduğunda bu sorun yoktur — kimse
+# okumazsa hiçbir şey olmaz. Ayrıca "servis ayakta mı" sorusunun cevabı ücretsiz
+# gelir: kazıma başarısızsa `up` metriği 0 olur.
+
+global:
+  scrape_interval: 15s
+  # Bir hedef bu süre içinde cevap vermezse kazıma başarısız sayılır. Kazıma
+  # zaman aşımı aralıktan KISA olmalı; yoksa turlar üst üste biner.
+  scrape_timeout: 10s
+
+scrape_configs:
+  # Ağ geçidi compose içinde çalışır: konteyner adıyla erişilir.
+  # 9000 yönetim portudur ve compose onu dışarı AÇMAZ — metrikler ağ geçidinin
+  # dışarıya açık 8000 portunda görünmez.
+  - job_name: api-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["api-gateway:9000"]
+
+  # Diğer servisler bu makinede (konteynerde değil) çalışıyor. Konteyner içinden
+  # "localhost" konteynerin kendisidir; ana makineye `host.docker.internal` ile
+  # ulaşılır. Bu adres compose'daki `extra_hosts` ile Linux'ta da tanımlı.
+  #
+  # Bu asimetri geçicidir: servisler Faz 10'da compose'a alındığında hepsi
+  # konteyner adıyla kazınacak.
+  - job_name: catalog-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:9081"]
+
+  - job_name: order-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:9082"]
+
+  - job_name: inventory-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:9084"]
+
+  - job_name: payment-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:9086"]
+
+  - job_name: search-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:9087"]

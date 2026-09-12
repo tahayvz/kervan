@@ -146,7 +146,7 @@ indeksiyle faceted search, Redis ile cache ve dağıtık kilit sağlanır.
 
 ---
 
-## Faz 6 — Gözlemlenebilirlik (Observability)  · 6a ✅ · 6b planlı
+## Faz 6 — Gözlemlenebilirlik (Observability)  · 6a ✅ · 6b ✅ · 6c planlı
 
 **Neden:** Mikroservislerde bir hata 5 servise yayılabilir. "Nerede, kaç ms takıldı?"
 sorusuna cevap veremezsen prod'da körsün. Üç ayak: **log, metrik, trace**.
@@ -154,8 +154,8 @@ sorusuna cevap veremezsen prod'da körsün. Üç ayak: **log, metrik, trace**.
 **Ne inşa edilecek:**
 - **OpenTelemetry** ile enstrümantasyon (trace + metrik) — ✅ yapıldı (izleme)
 - **Jaeger**: dağıtık trace (istek servisler arası nasıl aktı) — ✅ yapıldı
-- **Prometheus** + **Grafana**: metrik toplama + dashboard'lar (RED/USE) — 6b
-- **Loki**: merkezî log; trace-id ile log korelasyonu — 6b
+- **Prometheus** + **Grafana**: metrik toplama + dashboard'lar (RED) — ✅ yapıldı
+- **Loki**: merkezî log; trace-id ile log korelasyonu — 6c
 
 **6a'da yapılanlar (izleme):** Altı servise de `micrometer-tracing-bridge-otel` +
 OTLP dışa aktarıcı eklendi. Enstrümantasyon **kod içinde**; Java ajanı bilinçli
@@ -173,6 +173,29 @@ HTTP isteği → stok → ödeme → tamamlanma.
 Bir tuzak testle sabitlendi: Connect'in varsayılan başlık dönüştürücüsü JSON'dur
 ve değeri tırnak içinde yazar; W3C ayrıştırıcısı böyle bir başlığı sessizce atar.
 `OutboxCdcIntegrationTest` başlığın **birebir eşit** olduğunu doğruluyor.
+
+**6b'de yapılanlar (metrik):** Altı servis de `/actuator/prometheus` ucunu açıyor,
+Prometheus gelip okuyor (ADR-0014). Uygulama metrik göndermiyor: gönderen taraf
+olsaydı Prometheus kapalıyken "biriktir mi, at mı" sorusunu her servis kendi
+çözerdi. Çeken taraf olunca "servis ayakta mı" sorusunun cevabı da bedava geliyor
+(`up`).
+
+Çerçevenin HTTP metriklerinin yanına **iş metrikleri** eklendi: outbox'ta bekleyen
+kayıt sayısı ve **en eskisinin yaşı**, kenara alınmış kayıtlar, duruma göre havada
+kalan saga sayısı, stok ve ödeme sonuçları. Alarm sayıya değil yaşa kurulur: kuyrukta
+tek kayıt olabilir ama o kayıt iki saattir bekliyordur.
+
+**Actuator iş portundan taşındı.** Her serviste ayrı bir yönetim portu var (iş portu
++ 1000) ve compose onu dışarı açmıyor. Ağ geçidi dışarıya açılan tek süreç; metrik ucu
+yönlendirme kimliklerini ve JVM ayrıntılarını yayıyor.
+`@ConditionalOnManagementPort(DIFFERENT)` emniyet kilidi: iki port birleştirilirse
+actuator'ı serbest bırakan bean kaybolur ve uçlar yeniden kimlik doğrulamasına döner.
+
+Panolar ve veri kaynağı kodda (`infra/docker/observability`). Kendi incelemem üç
+gerçek hata buldu: gecikme metriği yayıncının vazgeçtiği kayıtları sayıyordu (tek
+zehirli mesaj alarmı kalıcı olarak çalar hâle getiriyordu), pano veritabanından
+okunan bir gauge'i kopyalar arasında topluyordu (üç kopyada değer üçe katlanırdı) ve
+Grafana veri kaynağını isimle arıyordu — panolar boş açılırdı.
 
 **Kazanım:** OpenTelemetry ile uçtan uca trace context propagation sağlanır; bir
 isteğin hangi serviste kaç ms harcadığı Jaeger'da izlenir; Grafana'da RED
