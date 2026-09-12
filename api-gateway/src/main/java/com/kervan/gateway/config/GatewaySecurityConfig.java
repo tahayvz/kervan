@@ -54,6 +54,12 @@ class GatewaySecurityConfig {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        // Devre kesici acikken istek buraya YONLENDIRILIR (forward).
+                        // Kimlik dogrulamasi istenseydi, korunan bir rotanin geri
+                        // dusus cevabi 503 yerine 401 olurdu: istemci "servis
+                        // kapali" yerine "yetkin yok" duyardi. Uc gizli bilgi
+                        // dondurmuyor, yalnizca "su an yanit veremiyorum" diyor.
+                        .pathMatchers("/fallback/**").permitAll()
                         // Katalog okuması herkese açık: ürün listesi bir vitrindir,
                         // görmek için hesap gerekmez. Servisin bugünkü davranışı da
                         // budur; ağ geçidi onu değiştirmemeli.

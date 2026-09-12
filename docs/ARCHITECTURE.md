@@ -243,6 +243,31 @@ etiket Loki'yi metrik tarafındaki kardinalite sorununun aynısına sokar.
 - **Migration:** Şema/veri değişimi versiyonlu ve ileriye uyumlu — Postgres'te **Flyway**,
   MongoDB'de **Mongock**. Elle şema değişikliği yasak.
 - **Container:** Multi-stage build, non-root user, distroless/temurin slim imaj.
+- **Dayanıklılık:** Devre kesici yalnızca **senkron ve dış** sınırlarda — ağ geçidi →
+  servisler ve ödeme servisi → sağlayıcı. Kafka tüketicilerinde yok: orada zaten
+  yeniden deneme + ölü mektup var ve ikinci bir düzenek aynı soruya iki cevap
+  üretirdi (ADR-0016).
+
+### 8.1 Dayanıklılık zinciri
+
+```
+Bulkhead( CircuitBreaker( Retry( gerçek çağrı ) ) )
+```
+
+Sıra rastgele değil. **Retry en içte**: tekrar denemeler tek bir mantıksal çağrı
+sayılır; dışta olsaydı her deneme kesiciye ayrı başarısızlık yazılır ve kesici üç kat
+hızlı açılırdı. **Kesici ortada**: açıkken retry hiç çalışmaz; tersi olsaydı çökmüş
+bir sağlayıcıya her istek için üç çağrı giderdi. **Bulkhead en dışta**: yavaşlayan bir
+dış sistem, çağıranın iş parçacıklarının tamamını yutmamalı.
+
+**Zaman aşımı olmadan devre kesici işe yaramaz.** Kesici başarısızlık sayar; askıda
+kalan bir çağrı başarısız değildir. Üretimde asıl sık görülen arıza çökme değil
+yavaşlamadır.
+
+Ödeme tarafında iki ayrım var: **reddedilme başarısızlık değildir** (sağlayıcı
+çalışıyor ve "hayır" diyor) ve **her "ulaşamadım" tekrar denenmez** (istek gidip
+cevap gelmediyse tahsilat yapılmış olabilir). Gerekçeler ADR-0016'da.
+
 
 ---
 

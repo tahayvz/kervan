@@ -143,3 +143,49 @@ logging:
     # calistir ya da KERVAN_LOG_FILE ile tam yol ver:
     #   infra/docker/observability/README.md
     name: ${KERVAN_LOG_FILE:logs/payment-service.json}
+
+# --- Dayaniklilik (Faz 7) ---
+# Zincir kodda ACIKCA kuruluyor: ResilientPaymentGateway.
+# Karar kaydi: docs/adr/0016-where-circuit-breakers-go.md
+resilience4j:
+  circuitbreaker:
+    instances:
+      payment-provider:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        # REDDEDILME BASARISIZLIK DEGILDIR.
+        #
+        # Saglayici calisiyor ve "hayir" diyor. Bunu saymak, mesru bir ret
+        # dalgasinin (kampanya sonrasi limit asimlari, dolandiricilik dalgasi)
+        # kesiciyi acmasi ve CALISAN bir saglayiciya giden butun odemelerin
+        # kesilmesi demekti. Sistem, hicbir sey bozuk degilken kendini kapatirdi.
+        ignoreExceptions:
+          - com.kervan.payment.domain.model.PaymentDeclinedException
+
+  retry:
+    instances:
+      payment-provider:
+        maxAttempts: 3
+        waitDuration: 200ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        # Hangi hatanin tekrar denenebilecegi TIPTEN degil, hatanin ICERIGINDEN
+        # anlasilir: istek saglayiciya ulasmis olabilir mi? Gerekce sinifin
+        # kendi belgesinde.
+        retryExceptionPredicate: com.kervan.payment.infrastructure.messaging.RetryableProviderFailures
+
+  bulkhead:
+    instances:
+      payment-provider:
+        # Saglayiciya ayni anda en fazla bu kadar cagri gider. Yavaslayan bir dis
+        # sistem, tuketici is parcaciklarinin tamamini yutmamali: sinir olmasaydi
+        # odeme yavasligi butun servisi durdururdu.
+        maxConcurrentCalls: 8
+        # Sira beklemez. Beklemek gecikmeyi gizler ve sorunu yukari tasir;
+        # hemen "mesgulum" demek dogru cevaptir.
+        maxWaitDuration: 0

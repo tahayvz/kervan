@@ -34,6 +34,24 @@ spring:
           uri: ${KERVAN_CATALOG_URL:http://localhost:8081}
           predicates:
             - Path=/api/v1/products/**
+          filters:
+            # Bu rotanin KENDI devre kesicisi. Tek ortak kesici olsaydi katalog
+            # arizasi siparis trafigini de keserdi; birbirini tanimayan servisler
+            # birbirinin arizasini paylasmamali.
+            - name: CircuitBreaker
+              args:
+                name: catalog
+                fallbackUri: forward:/fallback/catalog
+                # Varsayilan olarak yalnizca ISTISNALAR (zaman asimi, baglanti
+                # reddi) basarisizlik sayilir; arka servisin dondurdugu bir 5xx
+                # sayilmaz. Bunlari acikca ekliyoruz:
+                #
+                #   502/503/504 = "arka tarafta bir sey bozuk ya da yok"
+                #   500         = EKLENMEDI. Cogu zaman O ISTEGE ozeldir (bozuk
+                #                 bir kayit, gecersiz bir parametre). Onu saymak,
+                #                 tek bir kotu kaydin butun trafigi kesmesine
+                #                 yol acardi.
+                statusCodes: "502,503,504"
 
         # Arama: urun aramasi da katalog listeleme gibi herkese acik. Kisisel veri
         # donmez ve yazma ucu yoktur.
@@ -41,6 +59,24 @@ spring:
           uri: ${KERVAN_SEARCH_URL:http://localhost:8087}
           predicates:
             - Path=/api/v1/search/**
+          filters:
+            # Bu rotanin KENDI devre kesicisi. Tek ortak kesici olsaydi katalog
+            # arizasi siparis trafigini de keserdi; birbirini tanimayan servisler
+            # birbirinin arizasini paylasmamali.
+            - name: CircuitBreaker
+              args:
+                name: search
+                fallbackUri: forward:/fallback/search
+                # Varsayilan olarak yalnizca ISTISNALAR (zaman asimi, baglanti
+                # reddi) basarisizlik sayilir; arka servisin dondurdugu bir 5xx
+                # sayilmaz. Bunlari acikca ekliyoruz:
+                #
+                #   502/503/504 = "arka tarafta bir sey bozuk ya da yok"
+                #   500         = EKLENMEDI. Cogu zaman O ISTEGE ozeldir (bozuk
+                #                 bir kayit, gecersiz bir parametre). Onu saymak,
+                #                 tek bir kotu kaydin butun trafigi kesmesine
+                #                 yol acardi.
+                statusCodes: "502,503,504"
 
         # Siparis: kimlik dogrulamasi zorunlu. Rol ve sahiplik denetimi
         # order-service'te yapilir, burada degil (ADR-0007).
@@ -48,6 +84,24 @@ spring:
           uri: ${KERVAN_ORDER_URL:http://localhost:8082}
           predicates:
             - Path=/api/v1/orders/**
+          filters:
+            # Bu rotanin KENDI devre kesicisi. Tek ortak kesici olsaydi katalog
+            # arizasi siparis trafigini de keserdi; birbirini tanimayan servisler
+            # birbirinin arizasini paylasmamali.
+            - name: CircuitBreaker
+              args:
+                name: orders
+                fallbackUri: forward:/fallback/orders
+                # Varsayilan olarak yalnizca ISTISNALAR (zaman asimi, baglanti
+                # reddi) basarisizlik sayilir; arka servisin dondurdugu bir 5xx
+                # sayilmaz. Bunlari acikca ekliyoruz:
+                #
+                #   502/503/504 = "arka tarafta bir sey bozuk ya da yok"
+                #   500         = EKLENMEDI. Cogu zaman O ISTEGE ozeldir (bozuk
+                #                 bir kayit, gecersiz bir parametre). Onu saymak,
+                #                 tek bir kotu kaydin butun trafigi kesmesine
+                #                 yol acardi.
+                statusCodes: "502,503,504"
 
   security:
     oauth2:
@@ -138,3 +192,53 @@ logging:
     name: ${KERVAN_LOG_FILE:logs/api-gateway.json}
   level:
     com.kervan.gateway: INFO
+
+# --- Dayaniklilik (Faz 7) ---
+# Karar kaydi: docs/adr/0016-where-circuit-breakers-go.md
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        # Son N cagriya bakar (sure degil sayi penceresi): dusuk trafikte zaman
+        # penceresi cogu zaman bos kalir ve kesici hic karar veremez.
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        # Bu sayidan az cagri varken karar VERILMEZ. Olmasaydi ilk cagri
+        # basarisiz oldugunda oran %100 gorunur ve kesici hemen acilirdi.
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        # Acik kalma suresi. Cok kisa olursa cokmus servise hemen geri yuklenir;
+        # cok uzun olursa duzelen servis bosuna bekletilir.
+        waitDurationInOpenState: 10s
+        # Yari acik durumda birkac deneme cagrisi gecirilir; hepsi basariliysa
+        # kesici kapanir.
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        # Durum degisiklikleri metrik olarak yayinlanir (Faz 6 panosunda gorunur).
+        registerHealthIndicator: false
+    instances:
+      catalog:
+        baseConfig: default
+      search:
+        baseConfig: default
+      orders:
+        baseConfig: default
+
+  timelimiter:
+    configs:
+      default:
+        # ZAMAN ASIMI OLMADAN DEVRE KESICI ISE YARAMAZ.
+        #
+        # Kesici basarisizlik sayar. Askida kalan bir cagri ise basarisiz degildir
+        # -- cevap beklenmeye devam eder. Zaman asimi olmadan yavas bir servis
+        # kesiciyi hic tetiklemez ve istekler birikir. Uretimde asil sik gorulen
+        # ariza da cokme degil YAVASLAMADIR.
+        timeoutDuration: 2s
+        cancelRunningFuture: true
+    instances:
+      catalog:
+        baseConfig: default
+      search:
+        baseConfig: default
+      orders:
+        baseConfig: default

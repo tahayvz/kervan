@@ -220,19 +220,44 @@ metrikleriyle alarm kurulur.
 
 ---
 
-## Faz 7 — Dayanıklılık (Resilience4j)
+## Faz 7 — Dayanıklılık (Resilience4j)  ✅
 
 **Neden:** Downstream servis yavaşladığında bütün sistem çökmemeli. "Bulkhead",
 "circuit breaker", "timeout", "retry" olmadan bir çağrı zinciri dominoyu devirir.
 
-**Ne inşa edilecek:**
-- **Resilience4j**: circuit breaker, retry (backoff), time limiter, bulkhead
-- Fallback stratejileri
-- Redis tabanlı rate limiting (Gateway'de)
-- Gerçekten devreye girdiğini gösteren testler (hata enjeksiyonu)
+**Ne inşa edildi:**
+- **Resilience4j**: circuit breaker, retry (backoff), time limiter, bulkhead — ✅
+- Fallback stratejileri — ✅
+- Redis tabanlı rate limiting (Gateway'de) — ✅ Faz 5'te yapılmıştı
+- Gerçekten devreye girdiğini gösteren testler — ✅
 
-**Kazanım:** Resilience4j ile circuit breaker ve bulkhead uygulanır; Gateway'de
-rate limiting; downstream timeout'larda fallback ile graceful degradation.
+**Nereye konuldu, nereye konmadı (ADR-0016).** Klasik cevap "her çağrıya devre
+kesici koy" olurdu; burada yanlış olurdu. Çağrıların çoğu senkron değil ve saga
+Kafka üzerinden yürüyor — orada zaten yeniden deneme + ölü mektup var (ADR-0009).
+İkinci bir düzenek, "bu mesaj neden işlenmedi" sorusuna iki ayrı cevap üretirdi.
+Aynı gerekçeyle dağıtık kilit de eklenmemişti (ADR-0011).
+
+Kesici yalnızca **senkron ve dış** iki sınıra kondu:
+
+1. **Ağ geçidi → arka servisler.** Rota başına AYRI kesici (tek ortak kesici olsaydı
+   katalog arızası sipariş trafiğini de keserdi), 2 saniyelik zaman aşımı ve 503 +
+   `Retry-After` dönen bir geri düşüş. Hiçbir rota uydurma veri dönmez: "siparişin
+   yok" cevabı, "şu an bakamıyorum" ile aynı şey değildir.
+2. **payment-service → ödeme sağlayıcısı.** Zincir `Bulkhead(CircuitBreaker(Retry))`
+   sırasıyla kuruldu ve sıra testle sabitlendi.
+
+**Zaman aşımı olmadan devre kesici işe yaramaz.** Kesici başarısızlık sayar; askıda
+kalan bir çağrı başarısız değildir, hâlâ beklenmektedir. Üretimde asıl sık görülen
+arıza da çökme değil yavaşlamadır.
+
+**Para tarafında iki ayrım.** Reddedilme başarısızlık değildir — sağlayıcı çalışıyor
+ve "hayır" diyor; kesici bunu saysaydı meşru bir ret dalgası çalışan bir sağlayıcıya
+giden bütün ödemeleri keserdi. Ve her "ulaşamadım" tekrar denenmez: istek gidip cevap
+gelmediyse tahsilat yapılmış olabilir, körlemesine tekrar denemek ikinci kez para
+çekmektir. Karar hatanın tipinden değil içeriğinden veriliyor.
+
+**Kazanım:** Çöken servise yük binmeye devam etmiyor, istemci hızlı ve anlaşılır bir
+cevap alıyor, kesici durumu Faz 6 panosunda görünüyor.
 
 ---
 

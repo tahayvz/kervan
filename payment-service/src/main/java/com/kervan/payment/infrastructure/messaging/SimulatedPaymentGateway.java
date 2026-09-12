@@ -9,7 +9,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Ödeme sağlayıcısının taklidi.
@@ -32,6 +34,18 @@ class SimulatedPaymentGateway implements PaymentGateway {
 
     private final BigDecimal declineAbove;
 
+    /**
+     * Sipariş kimliği -> verilen işlem kimliği.
+     *
+     * <p><b>Idempotentlik.</b> Aynı sipariş için ikinci kez tahsilat istenirse
+     * yeni bir tahsilat YAPILMAZ; ilk verilen kimlik döner. Gerçek sağlayıcılarda
+     * bunun karşılığı "idempotency key" başlığıdır ve tam da bu yüzden vardır:
+     * ağ koptuğunda çağıran tarafın tekrar denemesi güvenli olsun diye.
+     *
+     * <p>Taklit olduğu için bellekte; gerçeğinde sağlayıcının kendi tarafındadır.
+     */
+    private final Map<String, String> referencesByOrder = new ConcurrentHashMap<>();
+
     SimulatedPaymentGateway(@Value("${kervan.payment.simulator.decline-above}") BigDecimal declineAbove) {
         this.declineAbove = declineAbove;
     }
@@ -43,10 +57,14 @@ class SimulatedPaymentGateway implements PaymentGateway {
                     "Tutar sağlayıcı sınırını aşıyor: %s %s".formatted(
                             amount.amount(), amount.currencyCode()));
         }
-        String reference = "SIM-" + UUID.randomUUID();
-        log.info("[TAKLIT] Tahsilat yapıldı: orderId={} tutar={} {} ref={}",
-                orderId, amount.amount(), amount.currencyCode(), reference);
-        return reference;
+        // computeIfAbsent: aynı sipariş için ikinci çağrı yeni tahsilat açmaz.
+        // Tekrar deneme güvenliğinin dayandığı davranış budur.
+        return referencesByOrder.computeIfAbsent(orderId, id -> {
+            String reference = "SIM-" + UUID.randomUUID();
+            log.info("[TAKLIT] Tahsilat yapıldı: orderId={} tutar={} {} ref={}",
+                    id, amount.amount(), amount.currencyCode(), reference);
+            return reference;
+        });
     }
 
     @Override

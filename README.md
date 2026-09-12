@@ -81,7 +81,7 @@ marked done unless its code and tests are in this repository.
 | 6a | **Distributed tracing — OpenTelemetry + Jaeger, and the trace survives the outbox** | ✅ Done |
 | 6b | **Metrics — Prometheus, Grafana, and an actuator that left the public port** | ✅ Done |
 | 6c | **Logs — structured to a file, Alloy ships them, one click from log to trace** | ✅ Done |
-| 7 | Resilience4j — circuit breaker, retry, bulkhead, rate limiting | Planned |
+| 7 | **Resilience — circuit breakers where they belong, and nowhere else** | ✅ Done |
 | 8a | **CI — build, tests on real containers, image build, CodeQL** | ✅ Done |
 | 9 | Kubernetes + Helm | Planned |
 | 10 | Synthetic load — seeded data, sustained traffic, watching it from outside | Planned |
@@ -508,6 +508,40 @@ dashboard still loads, only the link to the trace quietly dies. So the test read
 
 ---
 
+### Resilience: the interesting part is where the breakers are not
+
+A slow dependency is worse than a dead one. A dead one fails immediately; a slow one
+holds the caller, which holds its caller, until the chain topples. So the gateway
+gives every route its own circuit breaker with a two-second timeout, and the payment
+service wraps its provider in `Bulkhead(CircuitBreaker(Retry(call)))`.
+
+**Order matters and is pinned by a test.** Retry sits innermost so three attempts
+count as one logical failure; outside the breaker they would count as three and trip
+it three times faster, and a failing provider would receive three calls per request
+instead of one — the protection tripling the load it was meant to shed.
+
+**A circuit breaker without a timeout does nothing.** It counts failures, and a call
+that hangs has not failed yet — it is still being waited on. That is why the timeout
+comes first: the common production failure is slowness, not death.
+
+The more interesting decisions were about where *not* to put one. Kafka consumers
+already retry and dead-letter (ADR-0009); a second mechanism would give two different
+answers to "why wasn't this message processed". The Redis cache already falls through
+to the database. Breakers went only on the two synchronous, external edges.
+
+Payments needed two distinctions that are easy to get wrong and expensive to get
+wrong. **A decline is not a failure** — the provider is up and saying no. Counting
+declines would mean a legitimate wave of them (a fraud spike, limits after a
+promotion) opens the breaker and stops every payment to a perfectly healthy provider:
+the system shutting itself off while nothing is broken. And **not every "couldn't
+reach it" may be retried**: if the request never left, retrying is safe; if it left
+and the answer was lost, the charge may already have happened, and retrying blind
+charges the customer twice. The decision is made from the *content* of the failure
+rather than its type, and the asymmetry is deliberate — a cancelled order costs far
+less than a double charge.
+
+---
+
 ### The saga
 
 An order spans three services, and a distributed transaction across them does not scale.
@@ -593,7 +627,7 @@ Everything is open source. Items not marked ✅ belong to later phases.
 | Cache / rate limiting | Redis | ✅ |
 | API gateway | Spring Cloud Gateway | ✅ |
 | Identity | Keycloak (OAuth2 / OIDC / JWT) | ✅ |
-| Resilience | Resilience4j | planned |
+| Resilience | Resilience4j | ✅ |
 | Tracing | OpenTelemetry (Micrometer bridge) + Jaeger | ✅ |
 | Metrics | Prometheus + Grafana (dashboards as code) | ✅ |
 | Logs | Loki + Grafana Alloy | ✅ |

@@ -47,6 +47,16 @@
         </dependency>
 
         <!--
+          Devre kesici (circuit breaker). Spring Cloud'un soyutlamasi, altinda
+          Resilience4j calisir. Ag gecidi filtresi bu soyutlamayi kullanir;
+          gerekce ADR-0016.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
+
+        <!--
           İzleme (tracing) — bir isteğin servisler arasındaki yolculuğunun kaydı.
           Spring zaten her HTTP isteği, Kafka mesajı ve repository çağrısı için bir
           "observation" üretir; bu köprü onları OpenTelemetry span'ine çevirir.

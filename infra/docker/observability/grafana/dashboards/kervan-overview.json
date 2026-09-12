@@ -615,6 +615,290 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "type": "row",
+      "title": "Dayaniklilik",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Acik devre kesiciler",
+      "description": "1 = kesici ACIK, o servise/saglayiciya cagri gitmiyor.\n\nBurada sum() DEGIL ham seri gosteriliyor: devre kesici durumu her kopyada AYRI'dir (kendi hafizasi, kendi sayaci). Veritabanindan okunan gauge'lerin aksine burada kopyalar ayni seyi bildirmez -- bir kopyanin kesicisi acikken digerininki kapali olabilir ve bu bilgi degerlidir.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "resilience4j_circuitbreaker_state{state=\"open\"}",
+          "legendFormat": "{{name}} @ {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Devre kesici basarisizlik orani",
+      "description": "Esigi asinca kesici acilir. -1 degeri 'henuz karar verecek kadar cagri yok' demektir (minimumNumberOfCalls). Ilk cagri basarisiz oldugunda oran %100 gorunmesin diye boyle.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "resilience4j_circuitbreaker_failure_rate",
+          "legendFormat": "{{name}} @ {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tekrar denenerek basarili cagrilar",
+      "description": "ERKEN UYARI. Bu seri yukseldiginde henuz hicbir siparis dusmemistir: cagrilar basariyla tamamlaniyor, ama ilk denemede degil. Saglayici bozulmaya basladiginda once burasi kipirdar, sonra kesici acilir.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (name) (rate(resilience4j_retry_calls_total{kind=\"successful_with_retry\"}[1m]))",
+          "legendFormat": "{{name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Geri dususe giden istekler (ag gecidi)",
+      "description": "Istemciye 503 donen istekler. Sifirdan farkliysa bir arka servis erisilemiyor demektir; hangisi oldugu yoldan okunur.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{uri=~\"/fallback/.*\"}[1m]))",
+          "legendFormat": "{{uri}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Es zamanlilik siniri: kalan hak",
+      "description": "Sifira yaklasiyorsa saglayici yavasliyor ve cagrilar birikiyordur. Sinir olmasaydi bu birikme tuketici is parcaciklarinin tamamini yutardi -- yani yavas bir dis sistem butun servisi durdururdu.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "resilience4j_bulkhead_available_concurrent_calls",
+          "legendFormat": "{{name}} @ {{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ]
     }
   ],
   "templating": {

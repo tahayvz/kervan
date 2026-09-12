@@ -33,6 +33,16 @@
         </dependency>
 
         <!--
+          Dayaniklilik: devre kesici, yeniden deneme, es zamanlilik siniri.
+          Ayarlar application.yml'de, uygulama ise ResilientPaymentGateway'de
+          ACIKCA yapilir (anotasyonla degil); gerekce ADR-0016.
+        -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+
+        <!--
           İzleme (tracing) — bir isteğin servisler arasındaki yolculuğunun kaydı.
           Spring zaten her HTTP isteği, Kafka mesajı ve repository çağrısı için bir
           "observation" üretir; bu köprü onları OpenTelemetry span'ine çevirir.
