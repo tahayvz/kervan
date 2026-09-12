@@ -73,7 +73,7 @@ marked done unless its code and tests are in this repository.
 | 3c | **Debezium CDC — PostgreSQL WAL + outbox routing** | ✅ Done |
 | 3d | **Debezium CDC — MongoDB change streams (Catalog)** | ✅ Done |
 | 4a | **Saga message contracts + topic topology** | ✅ Done |
-| 4b | **Inventory Service — stock reservation, idempotent consumer, compensation** | ✅ Done |
+| 4b | **Inventory Service — stock reservation, idempotent consumer, compensation, goods receipt** | ✅ Done |
 | 4c | **Payment Service — capture, refund, simulated provider behind a port** | ✅ Done |
 | 4d | **Saga orchestrator — state machine, compensation, idempotent steps** | ✅ Done |
 | 5a | **Search Service — Elasticsearch read model fed by catalogue CDC** | ✅ Done |
@@ -278,7 +278,23 @@ Service documentation: [order-service/README.md](order-service/README.md)
 ### Inventory Service
 
 Runs the saga's first step: it reserves stock for an order, and releases the
-reservation when payment fails. It has no REST API — this service talks in messages.
+reservation when payment fails. Most of its traffic is messages, not requests.
+
+**Stock only ever went down.** Reserving and releasing existed; there was no way in. The
+seed script gave that away — it wrote into this service's database with `psql`, the one
+thing a service boundary is supposed to forbid. Stock now enters through a goods receipt
+(ADR-0019):
+
+```
+POST /api/v1/stock/{sku}/receipts   { "receiptId": "...", "quantity": 500 }
+```
+
+Quantities **add**. Setting stock to an absolute number would silently lose one of two
+concurrent entries, and would collapse "goods arrived" and "a stock count says otherwise"
+into the same operation — one is an event, the other a claim. The `receiptId` is the
+client's, because only the side that repeats a request can stop the repeat from counting
+twice; it is the receipt table's primary key, so a retried request writes nothing. Admin
+only, reads included: what is left in stock is commercial information.
 
 Stock is kept as two numbers, available and reserved, rather than one. With a single
 number there would be no way to know how much to give back when the saga compensates;

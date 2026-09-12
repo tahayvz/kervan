@@ -312,6 +312,9 @@ services:
       KERVAN_ORDER_URL: http://order-service:8082
       KERVAN_JWKS_URI: http://keycloak:8080/realms/kervan/protocol/openid-connect/certs
       KERVAN_SEARCH_URL: http://search-service:8087
+      # Stok ucu (ADR-0019). Bu satir olmadan ag gecidi varsayilana, yani
+      # 'localhost:8084'e gider -- ki konteyner icinde orasi GECIDIN KENDISIDIR.
+      KERVAN_INVENTORY_URL: http://inventory-service:8084
       SPRING_DATA_REDIS_URL: redis://redis:6379
       # Konteyner icinden 'localhost' konteynerin KENDISIDIR; varsayilan adres
       # burada calismaz. Toplayiciya compose agindaki adiyla gidilir.
@@ -536,6 +539,9 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KERVAN_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       KERVAN_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      # Stok ucu artik korumali (ADR-0019): servis bir OAuth2 resource server.
+      # Bu adres olmadan token dogrulanamaz ve her istek 401 doner.
+      KERVAN_JWKS_URI: http://keycloak:8080/realms/kervan/protocol/openid-connect/certs
       LOGGING_FILE_NAME: /var/log/kervan/inventory-service.json
     volumes:
       - ../../logs:/var/log/kervan

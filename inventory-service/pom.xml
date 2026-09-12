@@ -41,12 +41,46 @@
           Faz 6'daki testler metrikleri MeterRegistry uzerinden okudugu icin
           HTTP yolunu hic denememisti.
 
-          Is portu (server.port) hicbir sey sunmaz; actuator ayri yonetim
-          portunda durur (ADR-0014).
+          GUNCELLEME (ADR-0019): is portu artik BOS DEGIL. Stok girisi icin bir
+          REST ucu var (/api/v1/stock/**). Actuator yine ayri yonetim portunda
+          durur (ADR-0014); bu ayrim degismedi.
         -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+          Istek dogrulama. starter-web BUNU ICERMEZ (Boot 2.3'ten beri ayri):
+          eklenmezse @Valid ve @NotBlank sessizce HICBIR SEY YAPMAZ: anotasyonlar
+          derlenir, calisma aninda yok sayilir ve gecersiz govde kabul edilir.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!--
+          Guvenlik. Servis bir OAuth2 RESOURCE SERVER'dir: token uretmez, dogrular.
+          Kimlik dogrulama ag gecidinde, YETKI burada denetlenir (ADR-0007).
+
+          Stok girisi yalnizca ADMIN rolunundur. Bu bagimlilik olmasaydi yeni HTTP
+          ucu kimlik dogrulamasiz acilirdi ve onu koruyan tek sey "bu servis
+          disariya acilmiyor" olurdu. Oysa Kubernetes'te varsayilan ag her seye
+          aciktir, NetworkPolicy da yok (infra/k8s/README.md).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
 
         <dependency>
@@ -113,6 +147,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

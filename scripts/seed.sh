@@ -12,9 +12,13 @@
 # yetki, dogrulama ve olay yayini hic calismazdi -- yani tohumlama, sistemin
 # calistigina dair hicbir sey kanitlamazdi.
 #
-# TEK ISTISNA STOK. inventory-service'in stok GIRISI icin bir ucu yok: stok
-# yalnizca dusurulebiliyor, artirilamiyor. Bu gercek bir eksik (yol haritasinda
-# yazili) ve burada SQL ile geciliyor.
+# ESKIDEN BIR ISTISNA VARDI: STOK. inventory-service'in stok girisi icin ucu
+# yoktu ve bu betik stogu `psql` ile DOGRUDAN o servisin veritabanina yaziyordu.
+# Yani "her servis kendi verisine sahiptir" kurali (ADR-0001) tam da onu
+# dogrulamasi gereken betik tarafindan deliniyordu.
+#
+# ADR-0019 ile kapandi: stok artik mal kabul ucundan giriyor. Betigin artik
+# veritabani erisimine ihtiyaci YOK; her sey ag gecidinden gecer.
 #
 # Kullanim:  scripts/seed.sh [urun_sayisi]
 
@@ -24,7 +28,11 @@ PRODUCT_COUNT="${1:-25}"
 GATEWAY="${KERVAN_GATEWAY:-http://localhost:8000}"
 KEYCLOAK="${KERVAN_KEYCLOAK:-http://localhost:8080}"
 STOCK_PER_SKU="${KERVAN_SEED_STOCK:-100000}"
-PG_CONTAINER="${KERVAN_PG_CONTAINER:-kervan-postgres}"
+
+# Tohumlama makbuzlarinin onegi. Ayni onekle ikinci kez kosulursa stok TEKRAR
+# EKLENMEZ: makbuz kimligi ayni kalir ve uc idempotenttir (ADR-0019).
+# Her kosuda taze stok isteniyorsa onek degistirilir.
+RECEIPT_PREFIX="${KERVAN_SEED_RECEIPT_PREFIX:-seed}"
 
 say() { printf '%s\n' "$*" >&2; }
 
@@ -121,21 +129,36 @@ done
 say "  ${#SKUS[@]} urun olusturuldu ve yayina alindi."
 
 # ---------- 3) Stok ----------
-say "Stok kayitlari aciliyor (SKU basina ${STOCK_PER_SKU})..."
-VALUES=$(printf "('%s', ${STOCK_PER_SKU}, 0, now())," "${SKUS[@]}" | sed 's/,$//')
-docker exec -i "${PG_CONTAINER}" psql -U kervan -d inventory -v ON_ERROR_STOP=1 -q <<SQL
-INSERT INTO stock_items (sku, available_quantity, reserved_quantity, updated_at)
-VALUES ${VALUES}
-ON CONFLICT (sku) DO UPDATE
-  SET available_quantity = EXCLUDED.available_quantity,
-      reserved_quantity  = 0,
-      updated_at         = now();
-SQL
+#
+# Ag gecidi uzerinden, mal kabul ucuyla (ADR-0019). Eskiden burada `psql` vardi;
+# betik baska bir servisin veritabanina dogrudan yaziyordu.
+say "Mal kabulu yapiliyor (SKU basina ${STOCK_PER_SKU})..."
+STOCK_OK=0
+STOCK_FAIL=0
+for SKU in "${SKUS[@]}"; do
+  CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+    "${GATEWAY}/api/v1/stock/${SKU}/receipts" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H 'Content-Type: application/json' \
+    -d "{\"receiptId\":\"${RECEIPT_PREFIX}-${SKU}\",\"quantity\":${STOCK_PER_SKU}}")
+
+  if [ "${CODE}" = "200" ]; then
+    STOCK_OK=$((STOCK_OK + 1))
+  else
+    STOCK_FAIL=$((STOCK_FAIL + 1))
+    say "  ${SKU}: mal kabulu basarisiz (HTTP ${CODE})"
+  fi
+done
+
+if [ "${STOCK_FAIL}" -gt 0 ]; then
+  say "HATA: ${STOCK_FAIL} SKU icin stok girilemedi."
+  exit 1
+fi
 
 say ""
 say "Tohumlama bitti."
 say "  urun    : ${#SKUS[@]}"
-say "  stok    : SKU basina ${STOCK_PER_SKU}"
+say "  stok    : ${STOCK_OK} SKU, her birine ${STOCK_PER_SKU}"
 say ""
 say "Arama indeksinin dolmasi birkac saniye surer (CDC -> Kafka -> Elasticsearch)."
 say "Kontrol:  curl -s '${GATEWAY}/api/v1/search/products?q=Nike' | head -c 300"

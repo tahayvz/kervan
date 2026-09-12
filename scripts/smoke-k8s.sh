@@ -153,6 +153,10 @@ say "4) Ag gecidi disaridan yonlendiriyor mu?"
 # NodePort 30080 -> kind dugumunde 8000 (kind-cluster.yaml).
 check "urun listesi (acik uc)"     http_ok_retry "${GATEWAY}/api/v1/products"
 check "siparis ucu tokensiz 401"   http_ok "${GATEWAY}/api/v1/orders/yok" 401
+# Stok ucu (ADR-0019). Kumede Keycloak yok, yani gecerli bir token uretilemiyor;
+# sorulabilecek sey "korumali mi". Yetkinin DOGRU calistigi (musteri 403, yonetici
+# 200) inventory-service'in entegrasyon testinde kanitlaniyor.
+check "stok ucu tokensiz 401"     http_ok "${GATEWAY}/api/v1/stock/yok" 401
 if exists kervan-search-service; then
   check "arama (acik uc)"          http_ok_retry "${GATEWAY}/api/v1/search/products?q=test"
 else

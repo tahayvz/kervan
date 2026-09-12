@@ -66,6 +66,7 @@ services:
       KERVAN_CATALOG_URL: http://kervan-catalog-service:8081
       KERVAN_ORDER_URL: http://kervan-order-service:8082
       KERVAN_SEARCH_URL: http://kervan-search-service:8087
+      KERVAN_INVENTORY_URL: http://kervan-inventory-service:8084
       SPRING_DATA_REDIS_URL: redis://kervan-redis:6379
 
   catalog-service:

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 class StockRepositoryAdapter implements StockRepository {
@@ -17,6 +18,19 @@ class StockRepositoryAdapter implements StockRepository {
     StockRepositoryAdapter(SpringDataStockRepository repository, Clock clock) {
         this.repository = repository;
         this.clock = clock;
+    }
+
+    /**
+     * Koşulu veritabanı uygular; gerekçesi porttaki belgede.
+     */
+    @Override
+    public void createIfAbsent(String sku) {
+        repository.insertIfAbsent(sku, clock.instant());
+    }
+
+    @Override
+    public Optional<StockItem> find(String sku) {
+        return repository.findById(sku).map(StockItemEntity::toDomain);
     }
 
     @Override

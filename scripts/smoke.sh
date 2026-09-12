@@ -72,6 +72,10 @@ say "3) Ag gecidi yonlendiriyor mu?"
 check "urun listesi (acik uc)"        http_ok "${GATEWAY}/api/v1/products"
 check "arama (acik uc)"               http_ok "${GATEWAY}/api/v1/search/products?q=test"
 check "siparis ucu tokensiz 401"      http_ok "${GATEWAY}/api/v1/orders/yok" 401
+# Stok ucu (ADR-0019). Eskiden bu servisin hic HTTP ucu yoktu; simdi var ve
+# KORUMALI olmasi gerekiyor. Kontrol, guvenligin yanlislikla gevsetilmesi
+# durumunda kirilir.
+check "stok ucu tokensiz 401"        http_ok "${GATEWAY}/api/v1/stock/yok" 401
 # Metrik ucu DISARIYA acik olmamali (ADR-0014). 404 bekleniyor: bu portta
 # actuator diye bir sey yok.
 check "metrik ucu ana kapida YOK"     http_ok "${GATEWAY}/actuator/prometheus" 401

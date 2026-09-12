@@ -92,6 +92,21 @@ spring:
                 #                 yol acardi.
                 statusCodes: "502,503,504"
 
+        # Stok: mal kabulu ve stok goruntuleme (ADR-0019). Kimlik dogrulamasi
+        # zorunlu; ROL denetimi inventory-service'te yapilir, burada degil
+        # (ADR-0007). Yani buradan tokensiz gecen istek 401, musteri token'iyla
+        # gecen istek servisten 403 alir.
+        - id: stock
+          uri: ${KERVAN_INVENTORY_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/stock/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: stock
+                fallbackUri: forward:/fallback/stock
+                statusCodes: "502,503,504"
+
         # Siparis: kimlik dogrulamasi zorunlu. Rol ve sahiplik denetimi
         # order-service'te yapilir, burada degil (ADR-0007).
         - id: orders
@@ -243,6 +258,8 @@ resilience4j:
         baseConfig: default
       orders:
         baseConfig: default
+      stock:
+        baseConfig: default
 
   timelimiter:
     configs:
@@ -261,4 +278,6 @@ resilience4j:
       search:
         baseConfig: default
       orders:
+        baseConfig: default
+      stock:
         baseConfig: default

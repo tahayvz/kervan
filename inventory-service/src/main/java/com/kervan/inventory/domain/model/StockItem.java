@@ -40,6 +40,26 @@ public record StockItem(String sku, int available, int reserved) {
     }
 
     /**
+     * Mal kabulü: gelen miktarı satılabilire ekler (ADR-0019).
+     *
+     * <p><b>Neden toplamalı, neden atama değil?</b> "Stok artık 500 olsun" demek, aynı
+     * anda gelen iki girişten birini sessizce kaybetmek olurdu — ikisi de mevcut değeri
+     * okur, ikisi de kendi sonucunu yazar, biri buharlaşır. Ekleme böyle bir kayıp
+     * üretmez: iki teslimat da sayılır.
+     *
+     * <p>{@code reserved} değişmez. Gelen mal kimseye tutulmuş değildir; yalnızca
+     * satılabilir havuza girer.
+     *
+     * @throws ArithmeticException toplam {@code int} sınırını aşarsa. Sessizce negatife
+     *     dönmesi, stok yaratmaktan daha kötü olurdu: bir sonraki ayırma "yetersiz stok"
+     *     der ve sebebi hiçbir yerde görünmez.
+     */
+    public StockItem receive(int quantity) {
+        requirePositive(quantity);
+        return new StockItem(sku, Math.addExact(available, quantity), reserved);
+    }
+
+    /**
      * Ayrılmış miktarı satılabilire geri taşır (Saga telafisi).
      *
      * <p>Tutulandan fazlasını geri bırakmak stok yaratmak olurdu; bu bir hesap

@@ -70,6 +70,39 @@ class StockItemTest {
         assertThatThrownBy(() -> item.reserve(0)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> item.reserve(-1)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> item.release(0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> item.receive(0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> item.receive(-1)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("mal kabulü satılabilire EKLER, ayrılmışa dokunmaz")
+    void receiveAddsToAvailable() {
+        StockItem afterReserve = item.reserve(4);   // available 6, reserved 4
+
+        StockItem received = afterReserve.receive(10);
+
+        assertThat(received.available()).isEqualTo(16);
+        assertThat(received.reserved()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("iki ayrı mal kabulü de sayılır (atama olsaydı biri kaybolurdu)")
+    void receivesAccumulate() {
+        // ADR-0019'un asıl gerekçesi: "stok artık N olsun" deseydik, aynı anda gelen
+        // iki girişten biri sessizce buharlaşırdı.
+        assertThat(item.receive(5).receive(7).available()).isEqualTo(22);
+    }
+
+    @Test
+    @DisplayName("taşma sessizce negatife dönmez, hata verir")
+    void receiveRejectsOverflow() {
+        // Math.addExact olmasaydı sonuç negatife sarar, StockItem kurucusu da bunu
+        // reddederdi -- ama hata mesajı "available negatif olamaz" derdi ve gerçek
+        // sebebi (taşma) hiçbir yerde görünmezdi.
+        StockItem nearLimit = new StockItem("SKU-1", Integer.MAX_VALUE - 1, 0);
+
+        assertThatThrownBy(() -> nearLimit.receive(2))
+                .isInstanceOf(ArithmeticException.class);
     }
 
     @Test

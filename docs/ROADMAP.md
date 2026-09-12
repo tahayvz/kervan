@@ -78,7 +78,7 @@ Rate limiting bu faza alınmadı; Redis tabanlı sınırlama Faz 7'de.
 
 ---
 
-## Faz 3 — Event-Driven Omurga (Kafka + Avro + Outbox + Debezium)
+## Faz 3 — Event-Driven Omurga (Kafka + Avro + Outbox + Debezium)  ✅
 
 **Neden:** Bu, projenin **kalbi** ve seni ayrıştıran kısım. Senkron REST çağrıları
 servisleri birbirine kilitler (coupling) ve zincirleme hataya (cascading failure)
@@ -102,7 +102,7 @@ event'ler Avro + Schema Registry ile şemalanıp geriye dönük uyumluluk garant
 
 ---
 
-## Faz 4 — Sipariş Akışı + Saga (dağıtık tutarlılık)
+## Faz 4 — Sipariş Akışı + Saga (dağıtık tutarlılık)  ✅
 
 **Neden:** Bir siparişte 3 servis (Order, Payment, Inventory) tutarlı olmalı ama
 dağıtık transaction (2PC) ölçeklenmez. Çözüm: **Saga** (telafi edici işlemler).
@@ -125,7 +125,7 @@ adımın telafi (compensation) işlemi tanımlanır, idempotency ile tekrarlar e
 
 ---
 
-## Faz 5 — Arama (Elasticsearch) + Cache (Redis)
+## Faz 5 — Arama (Elasticsearch) + Cache (Redis)  ✅
 
 **Neden:** "Nike, 44 numara, siyah, 1000-2000 TL" gibi çok kriterli aramayı SQL'de
 yapmak işkencedir. Ayrıca sık okunan veri her seferinde DB'ye gitmemeli.
@@ -422,9 +422,14 @@ kanıtlamaz.* Ayrıntı: GELISTIRME-GUNLUGU B32–B34.
 **Kazanım:** Kurulan her düzeneğin gerçekten çalıştığı ölçülmüş oldu. Bu fazın
 çıktısı kod değil, **sayılar ve öğrenilenlerdir.**
 
-**Açık kalan iş:** `inventory-service`'in stok **girişi** için bir ucu yok — stok
-yalnızca düşürülebiliyor. Tohumlama betiği bunu SQL ile geçiyor. Alan modelinde
-gerçek bir boşluk.
+**Açık kalan iş — KAPANDI (ADR-0019).** `inventory-service`'in stok **girişi** için
+bir ucu yoktu; stok yalnızca düşürülebiliyordu ve tohumlama betiği bunu `psql` ile
+geçiyordu — yani başka bir servisin veritabanına dışarıdan yazıyordu. Artık mal kabul
+ucu var (`POST /api/v1/stock/{sku}/receipts`), makbuz kimliğiyle idempotent, yalnızca
+`ADMIN`. `seed.sh` veritabanına hiç dokunmuyor.
+
+Yeni açık iş: stok **düzeltmesi** (hasarlı mal, sayım farkı) hâlâ yok. Bilinçli olarak
+ertelendi — "kim, hangi gerekçeyle düzeltebilir ve nasıl denetlenir" ayrı bir sorudur.
 
 ---
 

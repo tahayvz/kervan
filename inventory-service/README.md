@@ -6,6 +6,40 @@ ayırmayı geri alır.
 Karar gerekçeleri: [ADR-0005](../docs/adr/0005-saga-orchestration.md) (Saga),
 [ADR-0009](../docs/adr/0009-saga-message-topology.md) (mesaj topolojisi).
 
+## Stok girişi: mal kabulü (ADR-0019)
+
+Bu servis uzun süre stoğu yalnızca **düşürebiliyordu**. Ayırma ve geri bırakma vardı,
+girişi yoktu; `StockRepository.saveAll` de yalnızca günceller, olmayan satırı açmaz.
+Sonucu tohumlama betiğinde görünüyordu: betik stoğu `psql` ile doğrudan bu servisin
+veritabanına yazıyordu.
+
+```
+POST /api/v1/stock/{sku}/receipts   { "receiptId": "...", "quantity": 500 }
+GET  /api/v1/stock/{sku}
+```
+
+**Miktar eklenir, atanmaz.** "Stok artık 500 olsun" demek, aynı anda gelen iki girişten
+birini sessizce kaybetmek olurdu: ikisi de mevcut değeri okur, ikisi de kendi sonucunu
+yazar, biri buharlaşır.
+
+**`receiptId` istemcinin.** Sunucu üretseydi her yeniden deneme yeni bir makbuz olur ve
+miktar iki kez eklenirdi. Tekrarı ancak tekrarlayan taraf durdurabilir.
+
+**Yalnızca `ADMIN` — okuma da dâhil.** Kalan stok ticari bilgidir: "son 2 adet" rakibe
+fiyatlama ipucu, kötü niyetliye stok tüketme saldırısı için hedef verir. Müşteriye stok
+göstermek gerekirse bu uç açılarak değil, katalogda türetilmiş bir alanla ("stokta var /
+yok") yapılır.
+
+**Karar veritabanına bırakılır.** Hem makbuz yazma hem yeni SKU'nun satırını açma
+`INSERT ... ON CONFLICT DO NOTHING` ile yapılıyor. "Önce sorgula, sonra yaz" ikilisinin
+arasına ikinci bir istek girebilir ve ikisi de "yeni" sonucuna varabilirdi. JPA'nın
+`save()`'i burada özellikle yanlış olurdu: var olan kimliği **günceller**, yani tekrar
+gelen makbuz "yeni kayıt" sanılır ve miktar ikinci kez eklenirdi.
+
+**Stok düzeltmesi YOK** (hasarlı mal, sayım farkı). Bilinçli: "kim, hangi gerekçeyle
+düzeltebilir ve bu nasıl denetlenir" ayrı bir sorudur, mal kabulüyle karıştırmak ikisini
+de bulandırırdı.
+
 ## Akış
 
 ```

@@ -6,7 +6,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,7 +41,20 @@ class FallbackController {
     /** {@code waitDurationInOpenState} ile aynı: istemciye boşuna erken deneme dedirtmeyelim. */
     private static final String RETRY_AFTER_SECONDS = "10";
 
-    @GetMapping("/{service}")
+    /**
+     * <b>Metot kısıtı YOK</b> ve bu bilinçli.
+     *
+     * <p>Burası önce {@code @GetMapping} idi. Devre kesici geri düşüşü isteği
+     * <em>metoduyla birlikte</em> yönlendirir: kesici açıkken gelen bir
+     * {@code POST /api/v1/orders} buraya POST olarak düşer ve yalnızca GET kabul eden
+     * bir eşleme ona <b>405 Method Not Allowed</b> der.
+     *
+     * <p>Sonuç, sessizce yanlış bir cevaptır: gerçek sorun "arka servis erişilemiyor"
+     * iken istemci "bu uç POST kabul etmiyor" duyar — yani doğru olan yeniden denemeyi
+     * yapmaz, üstelik {@code Retry-After} başlığını da almaz. Hata en çok ihtiyaç
+     * duyulan anda, arıza anında ortaya çıkar.
+     */
+    @RequestMapping("/{service}")
     ResponseEntity<ProblemDetail> unavailable(@PathVariable String service) {
         // Uyarı seviyesinde: bu satır "arka servis cevap vermiyor" demektir ve
         // devre kesicinin metrikleriyle birlikte okunur.
