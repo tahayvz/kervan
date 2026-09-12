@@ -40,6 +40,19 @@ altısı da çalıştırılarak doğrulanıyor. Bu dizüstünde mümkün değil.
 arıyor. Bu pakette bunların hiçbiri yok; o betiğin 17 kontrolünün 11'i daha ilk
 saniyede kırılırdı.
 
+**İlk koşuda bir hata buldu.** Kafka hazır sayılmıyordu ve sorun Kafka değildi:
+probe'un `timeoutSeconds` varsayılanı **1 saniye**, kontrol komutu ise bir JVM
+başlatıyor. Yüklü bir düğümde bu asla bitmez — 66 deneme, 66 zaman aşımı — üstelik
+broker'ın kendi logunda `Kafka Server started` yazıyor. Aynı varsayılan `mongosh`
+probe'unda ve servislerin HTTP probe'larında da sessizce başarısızlık sayıyordu.
+Artık bütün probe'larda `timeoutSeconds` **açıkça** yazılı. Kural: exec probe bir
+süreç başlatır; başlattığı şey JVM ya da Node ise 1 saniye her zaman yanlıştır.
+
+**`kubectl wait --all` çıktısı yanıltıcıdır.** Nesneleri sırayla bekler ama zaman
+aşımı hepsi için ortaktır: takılan bir nesne bütün süreyi yer ve sırası gelmeyenler
+de "timed out" diye yazılır, hazır olsalar bile. İlk koşuda yedi dağıtım başarısız
+göründü, gerçekte takılan bir taneydi. Doğru okuma yeri pod listesi.
+
 **"Yeniden başlatma sayısı sıfır olmalı" bir kontrol DEĞİL.** İlk yazılışında öyleydi
 ve düzgün çalışan bir kümede kırıldı: order 4, payment 4, inventory 5 kez yeniden
 başlamıştı. Hiçbiri hata değil — aşağıdaki birinci maddenin doğrudan sonucu.

@@ -76,6 +76,14 @@ Gerçek bir ortama otomatik dağıtım **yoktur** ve bir kayıt defterine imaj
 - **Olumlu:** "Derledi" ile "çalışıyor" arasındaki boşluk kapandı. Bir servisin
   jar'ı bozulursa, portu kayarsa, actuator'ı açılmazsa ya da paket geçersiz
   YAML üretirse iş kırmızı olur.
+- **Kanıt — iş ilk koşusunda bir hata buldu.** Kafka hazır sayılmıyordu.
+  Sebebi Kafka değildi: probe'un `timeoutSeconds` varsayılanı **1 saniye** ve
+  kontrol komutu bir JVM başlatıyor. Yüklü bir düğümde bu asla bitmez (66 deneme,
+  66 zaman aşımı). Aynı hata `mongosh` probe'unda ve servislerin HTTP
+  probe'larında da vardı. Hata Faz 9'dan beri duruyordu; 291 test yeşildi, paket
+  bu makinede "çalışıyordu". Onu bulan şey yeni bir test değil, **başka bir
+  ortamda çalıştırılmış olmasıydı** — bu ADR'nin bütün gerekçesi. Düzeltme:
+  bütün probe'lara `timeoutSeconds` açıkça yazıldı (günlük B39).
 - **Olumlu:** Yerel kümedeki tek eksik (search-service) CI'da kapandı.
 - **Olumsuz / ödün:** CI süresi ~13 dakikadan ~24 dakikaya çıkıyor.
 - **Olumsuz / ödün:** Bu iş **uçtan uca sipariş akışını doğrulamaz.** Pakette

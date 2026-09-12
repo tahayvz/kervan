@@ -153,7 +153,16 @@ jobs:
             --set image.tag=ci
 
       # --wait yerine bu: helm'in tek satirlik "timed out" hatasi HANGI
-      # dagitimin takildigini soylemez, bu soyler.
+      # dagitimin takildigini soylemez.
+      #
+      # DIKKAT -- bu komutun ciktisi yanilticidir: `kubectl wait --all`
+      # nesneleri SIRAYLA bekler ama zaman asimi HEPSI ICIN ORTAKTIR. Takilan
+      # bir nesne butun sureyi yer ve sirasi ona gelmeyen her nesne de
+      # "timed out" diye yazilir -- HAZIR OLSALAR BILE. Ilk kosusta yedi
+      # dagitim basarisiz gorundu; gercekte takilan yalnizca Kafka'ydi, geri
+      # kalan alti tanesi alfabetik olarak ondan SONRA geldigi icin listeye
+      # dusmustu. Dogru okuma yeri: asagidaki teshis ciktisindaki pod listesi.
+      #
       # 15 dakika comert ve BILEREK oyle. Kubernetes'te `depends_on` yok:
       # Postgres'e ve Elasticsearch'e bagli servisler onlar hazir olana kadar
       # cokup yeniden baslar, her cokmede backoff buyur (10s, 20s, 40s...) ve
@@ -171,6 +180,13 @@ jobs:
         if: failure()
         run: |
           mkdir -p /tmp/diag
+          # EN ONEMLI SATIR: hazir OLMAYAN pod'lar. Yukaridaki bekleme adimi
+          # takilmayan nesneleri de basarisiz gosterebiliyor (orada aciklandi);
+          # gercek listeyi burasi veriyor.
+          echo "--- HAZIR OLMAYAN POD'LAR ---"
+          kubectl get pods --no-headers \
+            | awk '{split($2,a,"/"); if (a[1] != a[2]) print}' || true
+          echo "-----------------------------"
           kubectl get pods -o wide                  > /tmp/diag/pods.txt 2>&1 || true
           kubectl get events --sort-by=.lastTimestamp > /tmp/diag/events.txt 2>&1 || true
           kubectl describe pods                     > /tmp/diag/describe.txt 2>&1 || true

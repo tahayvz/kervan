@@ -58,6 +58,10 @@ spec:
             exec:
               command: ["pg_isready", "-U", {{ .Values.secrets.postgresUser | quote }}]
             periodSeconds: 5
+            # timeoutSeconds ACIKCA yaziliyor; varsayilani 1 SANIYE.
+            # Gerekcesi kafka'nin probe'unda (bu dosyanin asagisinda) uzun uzun
+            # yazili. Kisaca: yuklu bir dugumde 1 saniye hicbir seye yetmez.
+            timeoutSeconds: 3
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { memory: 256Mi }
@@ -97,7 +101,10 @@ spec:
             exec:
               command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
             initialDelaySeconds: 10
-            periodSeconds: 5
+            periodSeconds: 10
+            # mongosh bir Node.js surecidir; acilmasi tek basina saniyeler alir.
+            # 1 saniyelik varsayilanla CI'da defalarca zaman asimina ugradi.
+            timeoutSeconds: 5
           resources:
             requests: { cpu: 50m, memory: 256Mi }
             limits: { memory: 512Mi }
@@ -129,6 +136,7 @@ spec:
           readinessProbe:
             exec: { command: ["redis-cli", "ping"] }
             periodSeconds: 5
+            timeoutSeconds: 3
           resources:
             requests: { cpu: 20m, memory: 64Mi }
             limits: { memory: 160Mi }
@@ -194,8 +202,30 @@ spec:
             exec:
               command: ["sh", "-c", "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"]
             initialDelaySeconds: 20
-            periodSeconds: 10
-            failureThreshold: 12
+            periodSeconds: 15
+            failureThreshold: 20
+            # timeoutSeconds'IN VARSAYILANI 1 SANIYEDIR. Bu satir olmadan bu
+            # probe CI'da HIC GECMEDI.
+            #
+            # kafka-broker-api-versions bir kabuk betigi degil, bir JVM baslatir.
+            # Dort cekirdegi on bir konteynerle paylasan bir dugumde o JVM'in
+            # acilmasi saniyeler surer; 1 saniyede bitmesi imkansizdir.
+            #
+            # Belirtisi yaniltici: Kafka'nin KENDI logunda "Kafka Server started"
+            # yaziyor, "Awaiting socket connections on 0.0.0.0:9092" yaziyor --
+            # yani broker CALISIYOR. Bozuk olan sey KONTROLUN KENDISI:
+            #   Readiness probe failed: command timed out: ... timed out after 1s
+            #   (x66 over 13m)
+            # Kafka hazir sayilmadigi icin Service onu yayinlamiyor, ona bagli
+            # her sey askida kaliyor ve sebep Kafka'nin logunda GORUNMUYOR.
+            #
+            # Bu dizustunde farkedilmedi: makine hizli ve daha az konteyner
+            # calisiyordu, probe ucu ucuna geciyordu. Faz 8'in dagitim dogrulama
+            # isi ilk kosusunda bunu yakaladi.
+            #
+            # Genel kural: exec probe bir SUREC baslatir. Baslattigi sey bir JVM
+            # ya da Node ise 1 saniyelik varsayilan her zaman yanlistir.
+            timeoutSeconds: 10
           resources:
             requests: { cpu: 100m, memory: 512Mi }
             limits: { memory: 1Gi }
@@ -259,8 +289,9 @@ spec:
           readinessProbe:
             httpGet: { path: /_cluster/health, port: 9200 }
             initialDelaySeconds: 20
-            periodSeconds: 5
+            periodSeconds: 10
             failureThreshold: 30
+            timeoutSeconds: 5
           resources:
             requests: { cpu: 200m, memory: 1Gi }
             limits: { memory: 1536Mi }

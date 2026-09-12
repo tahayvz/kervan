@@ -586,6 +586,14 @@ Kubernetes cluster, applies the Helm chart for real, waits for the pods, and run
 runner is amd64, so nothing is switched off there — all six images are verified by
 being **run**, including the one this laptop cannot start.
 
+It earned its keep on the first run. Kafka never went ready, and Kafka was not the
+problem: a probe's `timeoutSeconds` defaults to **one second**, and the readiness
+command starts a JVM. On a loaded node that never finishes — 66 attempts, 66
+timeouts — while the broker's own log says `Kafka Server started`. The same default
+was quietly costing failures on the `mongosh` probe and on every service's HTTP
+probes. The bug had been there since Phase 9 with 291 tests green; what found it was
+not a new test but a **different machine**.
+
 ---
 
 ### Kubernetes, and the three things compose was hiding

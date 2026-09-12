@@ -99,6 +99,14 @@ spec:
               path: /actuator/health/readiness
               port: management
             periodSeconds: 3
+            # timeoutSeconds ACIKCA yaziliyor; varsayilani 1 SANIYEDIR ve bu
+            # sessizce yanlis olcum yapar. CI'da gorulen:
+            #   Startup probe failed: Get "http://.../health/readiness":
+            #   context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+            # Servis ayakta, ucu acik, yalnizca cevabi 1 saniyeyi asmis. Yuklu
+            # bir dugumde acilmakta olan bir JVM icin bu son derece normal.
+            # Sayilan basarisizlik gercek degil, OLCUM hatasiydi.
+            timeoutSeconds: 2
             failureThreshold: {{ $root.Values.defaults.startupFailureThreshold }}
 
           # HAZIR MI: trafik alabilir mi? Bagimliligi yoksa trafik KESILIR ama
@@ -108,6 +116,7 @@ spec:
               path: /actuator/health/readiness
               port: management
             periodSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 3
 
           # CANLI MI: surec kendini toparlayamaz halde mi? Ancak o zaman yeniden
@@ -119,6 +128,11 @@ spec:
               path: /actuator/health/liveness
               port: management
             periodSeconds: 10
+            # Canlilik en tehlikeli probe: basarisizligi pod'u OLDURUR. Dar bir
+            # zaman asimi, gecici olarak yavaslamis (GC, yogun dugum) saglikli
+            # bir servisi yeniden baslatir -- ve yeniden baslatmak yavasligi
+            # cozmez, uzerine bir de soguk JVM ekler. Burada comert olmak dogru.
+            timeoutSeconds: 5
             failureThreshold: 3
 
           securityContext:
