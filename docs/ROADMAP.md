@@ -441,6 +441,21 @@ yapılıyor; gerekçesi ve ödünü ADR'de. Mutasyonla doğrulandı.
 
 ---
 
+## Bilinen açıklar
+
+- **`order-service` testlerinde sıra duyarlılığı.** `mvn -Dsurefire.runOrder=alphabetical
+  verify` koşturulunca `OrderFlowIntegrationTest` düşüyor:
+  `RecordDeserialization Error ... kervan.orders.events-0 at offset 2`. Aynı Kafka
+  konusunu paylaşan test sınıfları birbirinin kaydını okuyor. Varsayılan sırada
+  görünmüyor, o yüzden CI yeşil — ama testler birbirinden yalıtık değil (günlük B44).
+- **Debezium *düzeneği* otomatik sınanmıyor.** Yapılandırma değerleri bağlandı
+  (ADR-0020), ama mantıksal çözümleme, publication ve replication slot yalnızca
+  Faz 10'da elle görüldü.
+- **Büyük stok düzeltmelerinde ikinci onay yok** (ADR-0021). `ADMIN` olan herkes
+  sınırsız düzeltebiliyor.
+
+---
+
 ## Faz sonrası (opsiyonel ileri seviye)
 
 - **Contract testing** (Spring Cloud Contract) — servisler arası sözleşme garantisi

@@ -30,6 +30,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Bir sarmalayıcının {@code @Primary}'si kalkarsa ya da ölçüm noktası kayarsa uygulama
  * çalışmaya devam eder, testler geçer ve panolar boş kalır. Faz 10'da tam olarak bu
  * yaşanmıştı: iki servisin metrikleri üretiliyor ama dışarı çıkmıyordu.
+ *
+ * <h2>Neden her iddia FARK üzerinden?</h2>
+ * {@link MeterRegistry} Spring bağlamına aittir ve bağlam test sınıfları arasında
+ * <b>önbelleklenip paylaşılır</b>: aynı {@code @SpringBootTest} yapılandırmasına sahip
+ * her sınıf aynı kayıt defterini, dolayısıyla aynı sayaçları görür. Sayaçlar da
+ * sıfırlanmaz.
+ *
+ * <p>İlk yazılışında iki test mutlak değer iddia ediyordu ({@code count == 1}) ve
+ * yerelde geçip CI'da kırıldı — çünkü aynı gerekçeyle düzeltme yapan başka bir test
+ * sınıfı vardı ve sıra makineye göre değişti. Mutlak iddia, testi kendi sınıfının
+ * dışındaki şeylere bağımlı kılar.
+ *
+ * <p>Doğrusu: ölçümü önce ve sonra oku, <b>farkı</b> iddia et.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestJwtSupport.class)
@@ -74,6 +87,17 @@ class StockMovementMetricsIntegrationTest extends AbstractIntegrationTest {
                 .tag("reason", reason.name()).tag("direction", direction).summary();
     }
 
+    /** Ölçüm henüz hiç kaydedilmemişse seri de yoktur; sıfır say. */
+    private long countOf(AdjustmentReason reason, String direction) {
+        DistributionSummary summary = adjusted(reason, direction);
+        return summary == null ? 0 : summary.count();
+    }
+
+    private double sumOf(AdjustmentReason reason, String direction) {
+        DistributionSummary summary = adjusted(reason, direction);
+        return summary == null ? 0 : summary.totalAmount();
+    }
+
     private String newSku() {
         return "SKU-" + UUID.randomUUID();
     }
@@ -110,16 +134,17 @@ class StockMovementMetricsIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("düzeltme gerekçe ve yön etiketleriyle sayılır")
     void adjustmentsAreMeasuredByReasonAndDirection() {
         String sku = receive(newSku(), "r-" + UUID.randomUUID(), 100);
+        long countBefore = countOf(AdjustmentReason.SHRINKAGE, "out");
+        double sumBefore = sumOf(AdjustmentReason.SHRINKAGE, "out");
 
         adjust(sku, new AdjustStockRequest("a-" + UUID.randomUUID(), -7,
                 AdjustmentReason.SHRINKAGE, null));
 
-        DistributionSummary out = adjusted(AdjustmentReason.SHRINKAGE, "out");
-        assertThat(out).isNotNull();
-        assertThat(out.count()).isEqualTo(1);
+        assertThat(adjusted(AdjustmentReason.SHRINKAGE, "out")).isNotNull();
+        assertThat(countOf(AdjustmentReason.SHRINKAGE, "out")).isEqualTo(countBefore + 1);
         // Miktar MUTLAK değerle kaydedilir: "yedi adet eksildi" negatif bir toplam
         // değil, yedi adetlik bir harekettir.
-        assertThat(out.totalAmount()).isEqualTo(7);
+        assertThat(sumOf(AdjustmentReason.SHRINKAGE, "out")).isEqualTo(sumBefore + 7);
     }
 
     @Test
@@ -127,15 +152,18 @@ class StockMovementMetricsIntegrationTest extends AbstractIntegrationTest {
     void directionsAreSeparate() {
         String sku = receive(newSku(), "r-" + UUID.randomUUID(), 100);
 
+        double outBefore = sumOf(AdjustmentReason.COUNT_CORRECTION, "out");
+        double inBefore = sumOf(AdjustmentReason.COUNT_CORRECTION, "in");
+
         adjust(sku, new AdjustStockRequest("a1-" + UUID.randomUUID(), -3,
                 AdjustmentReason.COUNT_CORRECTION, null));
         adjust(sku, new AdjustStockRequest("a2-" + UUID.randomUUID(), 5,
                 AdjustmentReason.COUNT_CORRECTION, null));
 
         // Tek seride toplansalardı birbirlerini götürür ve "sayım ne kadar oynuyor"
-        // sorusu cevapsız kalırdı.
-        assertThat(adjusted(AdjustmentReason.COUNT_CORRECTION, "out").totalAmount()).isEqualTo(3);
-        assertThat(adjusted(AdjustmentReason.COUNT_CORRECTION, "in").totalAmount()).isEqualTo(5);
+        // sorusu cevapsız kalırdı. Fark üzerinden: kayıt defteri paylaşılıyor.
+        assertThat(sumOf(AdjustmentReason.COUNT_CORRECTION, "out")).isEqualTo(outBefore + 3);
+        assertThat(sumOf(AdjustmentReason.COUNT_CORRECTION, "in")).isEqualTo(inBefore + 5);
     }
 
     @Test
