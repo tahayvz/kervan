@@ -19,6 +19,7 @@ COPY pom.xml .
 COPY event-contracts/pom.xml event-contracts/pom.xml
 COPY catalog-service/pom.xml catalog-service/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
+COPY saga-e2e-tests/pom.xml saga-e2e-tests/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
 COPY inventory-service/pom.xml inventory-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
@@ -46,7 +47,9 @@ WORKDIR /app
 #   "container has runAsNonRoot and image has non-numeric user (kervan)"
 RUN groupadd -r -g 10001 kervan && useradd -r -u 10001 -g kervan kervan
 
-COPY --from=build /workspace/api-gateway/target/api-gateway-*.jar app.jar
+# -exec: calistirilabilir jar. Normal jar da uretiliyor (modul bagimliligi
+# icin); glob ikisini birden yakalarsa COPY hata verir.
+COPY --from=build /workspace/api-gateway/target/api-gateway-*-exec.jar app.jar
 # Ad degil NUMARA. Yukaridaki gerekce.
 USER 10001:10001
 

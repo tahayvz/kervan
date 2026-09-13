@@ -676,10 +676,29 @@ processed side by side and send the same command twice.
 Saga state lives in a table, not memory: steps can be minutes apart and a restart in
 between would otherwise forget every order in flight.
 
-The integration test drives both paths over real Kafka, with the other two services'
-replies published by hand. **No test runs all three services together** — each has its own
-end-to-end test and the contracts between them are pinned by `event-contracts`, but that
-is not the same as proving the whole thing runs.
+For a long time each service's integration test drove its own half over real Kafka with
+the other side's replies **written by hand**. Two hand-written halves agreeing with each
+other is not the same as two real halves agreeing.
+
+`saga-e2e-tests` now runs order, inventory and payment **in one JVM** against real
+PostgreSQL and real Kafka, and walks all three paths: confirmed, payment declined
+(stock released), and stock short (payment never called). Sixteen seconds, and it runs
+on a laptop.
+
+One piece is substituted. `order-service` ships its own outbox to Kafka; inventory and
+payment rely on **Debezium**, so in-process their replies have no transport. A test
+bridge moves those rows, applying the connector file's rules verbatim. The substituted
+piece is the only piece that is not our code — and putting real Kafka Connect in there
+would have made the most important test the most fragile one, and unrunnable on an ARM
+laptop entirely (ADR-0020).
+
+The test is load-bearing: breaking the compensation step on purpose turns **only** the
+compensation case red and leaves the other two green.
+
+Standing three Spring applications on one classpath surfaced three collisions worth
+knowing about — the repackaged jar is not a usable dependency, `classpath:db/migration`
+is a global namespace, and so is `classpath:/application.yml`. The first two were real
+hygiene gaps and were fixed in production code; the third is handled in the test only.
 
 ---
 

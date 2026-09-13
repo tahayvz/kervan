@@ -133,7 +133,7 @@ class OutboxCdcIntegrationTest {
         // mantıksal WAL açıkken de çalıştığı böylece doğrulanmış olur.
         Flyway.configure()
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-                .locations("classpath:db/migration")
+                .locations("classpath:db/migration/order")
                 .load()
                 .migrate();
 

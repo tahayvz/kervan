@@ -156,6 +156,25 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!--
+                      CALISTIRILABILIR JAR AYRI BIR DOSYA OLSUN.
+
+                      Varsayilanda `repackage` hedefi ASIL ARTIFACT'I DEGISTIRIR:
+                      target/<modul>.jar artik normal bir jar degil, siniflari
+                      BOOT-INF/classes/ altinda duran bir fat jar olur.
+
+                      Bunun gorunmeyen bedeli, baska bir modulun bu module
+                      BAGIMLI OLAMAMASIDIR: siniflar beklenen yerde olmadigi icin
+                      derleme ya da calisma aninda bulunamaz. Uc servisi ayni
+                      JVM'de ayaga kaldiran saga testi tam olarak buna takildi.
+
+                      classifier ile iki dosya olusur:
+                        <modul>.jar        -> normal jar, bagimlilik olarak kullanilir
+                        <modul>-exec.jar   -> calistirilabilir olan; Dockerfile BUNU kopyalar
+                    -->
+                    <classifier>exec</classifier>
+                </configuration>
             </plugin>
         </plugins>
     </build>

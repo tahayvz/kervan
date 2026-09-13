@@ -33,7 +33,14 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # Gocler servis ADIYLA isimlenmis bir ALT KLASORDE.
+    #
+    # `classpath:db/migration` GLOBAL bir ad alanidir: birden fazla servis ayni
+    # classpath'e girdiginde (uc servisi tek JVM'de ayaga kaldiran saga testi tam
+    # olarak bunu yapiyor) Flyway hepsini birden gorur ve acilmayi reddeder:
+    #     "Found more than one migration with version 1"
+    # Her servisin kendi klasoru bu carpismayi yapisal olarak imkansiz kiliyor.
+    locations: classpath:db/migration/inventory
 
   security:
     oauth2:

@@ -45,6 +45,11 @@
         <module>payment-service</module>
         <module>search-service</module>
         <module>api-gateway</module>
+        <!--
+          Uc servisi AYNI ANDA ayaga kaldiran saga testi. Uretim kodu yok; yalnizca
+          test. En sonda cunku uc servise de bagimli.
+        -->
+        <module>saga-e2e-tests</module>
     </modules>
 
     <properties>

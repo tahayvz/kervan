@@ -431,6 +431,11 @@ ucu var (`POST /api/v1/stock/{sku}/receipts`), makbuz kimliğiyle idempotent, ya
 Yeni açık iş: stok **düzeltmesi** (hasarlı mal, sayım farkı) hâlâ yok. Bilinçli olarak
 ertelendi — "kim, hangi gerekçeyle düzeltebilir ve nasıl denetlenir" ayrı bir sorudur.
 
+**Üç servisin birlikte çalıştığı test — KAPANDI (ADR-0020).** `saga-e2e-tests` modülü
+order, inventory ve payment'ı aynı JVM'de, gerçek PostgreSQL ve gerçek Kafka üzerinde
+ayağa kaldırıp saga'nın üç yolunu yürütüyor. CDC taşıması teste özel bir köprüyle
+yapılıyor; gerekçesi ve ödünü ADR'de. Mutasyonla doğrulandı.
+
 ---
 
 ## Faz sonrası (opsiyonel ileri seviye)
