@@ -174,6 +174,17 @@ jobs:
       - name: Smoke test
         run: scripts/smoke-k8s.sh
 
+      # Belgelerdeki "guncelleme sirasinda 250 istegin 250'si 200 dondu" iddiasini
+      # HER KOSUDA yeniden olcer. Faz 9'da bu sayi elle olculmustu ve arkasinda
+      # hicbir koruma yoktu: maxUnavailable: 0 kaldirilsa, preStop beklemesi
+      # silinse ya da readiness probe'u is portuna tasinsa hicbir test kirilmazdi.
+      #
+      # En sonda: once sistemin dogru calistigi gosterilir (duman testi), sonra
+      # BOZULURKEN de calistigi. Sirasi ters olsaydi, kesinti olcumu zaten bozuk
+      # bir sistemde yapilirdi ve sonucu anlamsiz olurdu.
+      - name: Rollout without downtime
+        run: scripts/rollout-check.sh
+
       # Kirmizi bir isi uzaktan teshis etmenin TEK yolu bu. Olmadan elde
       # yalnizca "smoke test failed" kalir.
       - name: Collect diagnostics

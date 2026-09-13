@@ -22,6 +22,8 @@ Ağ geçidi: `curl http://localhost:8000/api/v1/products`
 
 Doğrulama: `scripts/smoke-k8s.sh`
 
+Kesintisiz güncelleme ölçümü: `scripts/rollout-check.sh`
+
 Silme: `kind delete cluster --name kervan`
 
 ## Aynısı CI'da da koşuyor (Faz 8, ADR-0018)
@@ -64,7 +66,25 @@ ile biter, bellek sınırı aşımı `OOMKilled` ile), ve pod hazır olduktan **
 
 **Doğruluyor:** imajlar kümede çalışıyor mu; servisler birbirini DNS ile buluyor
 mu; problar doğru uçları gösteriyor mu; kaynak sınırları ve düzgün kapanma
-çalışıyor mu; güncelleme kesintisiz mi (**ölçüldü: 250 isteğin 250'si 200**).
+çalışıyor mu; **güncelleme kesintisiz mi**.
+
+Sonuncusu Faz 9'da bir kez elle ölçülmüştü (250 isteğin 250'si 200) ve arkasında
+hiçbir koruma yoktu: `maxUnavailable: 0` kaldırılsa, `preStop` beklemesi silinse ya
+da readiness probe'u iş portuna taşınsa hiçbir test kırılmazdı — iddia belgede
+kalır, gerçek değişirdi. Artık `scripts/rollout-check.sh` bunu **her CI koşusunda**
+yeniden ölçüyor: yük altında `rollout restart`, sonra hem durum kodu hem **süre**
+denetleniyor.
+
+Süreyi de ölçmek zorunlu çıktı. `maxUnavailable: 1` ile zorlandığında hazır endpoint
+listesi ~3.6 saniye **boş kaldı** ve buna rağmen her cevap 200 döndü: hazır endpoint
+kalmayınca Kubernetes *sonlanmakta olan ama hâlâ hizmet veren* pod'a yönlendiriyor,
+kube-proxy de paketi reddetmek yerine düşürüyor — istek başarısız olmuyor, asılıyor.
+Yalnızca durum kodu sayan bir ölçüm o 3.6 saniyelik deliği "kesintisiz" diye
+raporlardı.
+
+Ölçerken bir şey daha görüldü: kesintiyi asıl önleyen `maxUnavailable: 0` değil,
+**`preStop` beklemesi + düzgün kapanma**. `preStop` kaldırıldığında aynı koşu 19
+bağlantı hatası ve 10 saniye asılan bir istek üretiyor.
 
 **Doğrulamıyor:** uçtan uca veri akışı. Kümede Schema Registry ve Debezium
 Connect yok — ikisi de ağır ve bu makinede emülasyon gerektiriyor. Saga'nın

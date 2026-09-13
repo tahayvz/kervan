@@ -636,7 +636,25 @@ that matters is the rollout: **250 of 250 requests returned 200 while pods were 
 replaced**. That is not luck, it is three things working together — a readiness probe
 so the new pod takes traffic only when it can serve, graceful shutdown so the old one
 finishes what it started, and `maxUnavailable: 0` so the old pod outlives the new
-one's readiness. Remove any one and there is a gap.
+one's readiness.
+
+That number used to be a one-off, measured by hand and then written down. Nothing
+re-checked it, so removing any of those pieces would have left the claim standing in
+three documents while the behaviour quietly changed. `scripts/rollout-check.sh` now
+re-measures it on every CI run: load the gateway, restart the deployment underneath
+it, and count.
+
+Building that check corrected the claim above. Counting status codes is not enough.
+With `maxUnavailable: 1` forced on, the endpoint list genuinely went empty for about
+3.6 seconds — and every single request still returned 200. Kubernetes routes to
+*terminating but still serving* pods when no ready endpoint is left, so `preStop`
+plus graceful shutdown were carrying the rollout on their own; `maxUnavailable: 0`
+was not the piece doing the work. Take `preStop` away and the same run produces
+nineteen refused connections and a request that hangs for ten seconds.
+
+So the check measures latency as well as status. A request that takes seconds is an
+outage whatever code it eventually returns, and a check that only counts 200s would
+have reported that 3.6-second hole as a clean rollout.
 
 Three things broke on the way, and each is a difference compose papers over.
 
