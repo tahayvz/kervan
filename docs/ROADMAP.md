@@ -443,11 +443,26 @@ yapılıyor; gerekçesi ve ödünü ADR'de. Mutasyonla doğrulandı.
 
 ## Bilinen açıklar
 
-- **`order-service` testlerinde sıra duyarlılığı.** `mvn -Dsurefire.runOrder=alphabetical
-  verify` koşturulunca `OrderFlowIntegrationTest` düşüyor:
-  `RecordDeserialization Error ... kervan.orders.events-0 at offset 2`. Aynı Kafka
-  konusunu paylaşan test sınıfları birbirinin kaydını okuyor. Varsayılan sırada
-  görünmüyor, o yüzden CI yeşil — ama testler birbirinden yalıtık değil (günlük B44).
+- **`order-service` testlerinde sıra duyarlılığı.** Teşhis edildi, düzeltilmedi.
+
+  `mvn -Dsurefire.runOrder=alphabetical verify` koşturulunca `OrderFlowIntegrationTest`
+  düşüyor:
+  ```
+  RecordDeserialization Error ... kervan.orders.events-0 at offset 2
+  Caused by: SerializationException: Unknown magic byte!
+  ```
+  Kök sebep: test sınıfları **aynı Kafka konteynerini ve aynı konuyu** paylaşıyor, ve
+  bir sınıf o konuya Confluent çerçevesi (sihirli bayt + şema kimliği) **olmayan** ham
+  baytlar yazıyor. `OrderFlowIntegrationTest`'in tüketicisi `auto.offset.reset=earliest`
+  ile sıfırdan okuduğu için o kayda çarpıyor.
+
+  Varsayılan sırada görünmüyor (Surefire'ın varsayılanı dosya sistemi sırası ve
+  işletim sistemine göre değişir), o yüzden CI yeşil. Ama bu bir şans: sıra değişirse
+  CI kod değişmeden kırmızıya döner.
+
+  İki olası çözüm: tüketici üretmeden **önce** konunun sonuna konumlansın, ya da
+  çözemediği kayıtları atlasın. İkisi de yazmadığım bir testi yeniden kurgulamayı
+  gerektiriyor; doğrulanmış bir düzeltmem olmadığı için dokunmadım (günlük B44).
 - **Debezium *düzeneği* otomatik sınanmıyor.** Yapılandırma değerleri bağlandı
   (ADR-0020), ama mantıksal çözümleme, publication ve replication slot yalnızca
   Faz 10'da elle görüldü.
