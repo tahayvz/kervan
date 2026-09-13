@@ -296,6 +296,17 @@ client's, because only the side that repeats a request can stop the repeat from 
 twice; it is the receipt table's primary key, so a retried request writes nothing. Admin
 only, reads included: what is left in stock is commercial information.
 
+Stock also moves the other way, and that is a different thing (ADR-0021). A receipt
+records an **event** — goods arrived. A correction records a **claim** — our number was
+wrong. So corrections carry a reason from a closed list, not free text ("kırık", "kirik",
+"hasarlı", "damaged" would otherwise all be distinct values and nobody could ask how much
+stock was broken last month), and the person is taken from the token rather than the
+request body, because an audit trail filled in by the caller is not an audit trail. A
+correction cannot open a stock row the way a receipt can — you cannot correct a number
+that was never recorded — and it never touches the reserved quantity: that stock is
+promised to a customer, and the right answer to losing it is cancelling their order, not
+quietly taking it.
+
 Stock is kept as two numbers, available and reserved, rather than one. With a single
 number there would be no way to know how much to give back when the saga compensates;
 reserving moves quantity between the two rather than destroying it.

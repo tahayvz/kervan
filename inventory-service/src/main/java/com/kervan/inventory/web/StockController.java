@@ -1,8 +1,11 @@
 package com.kervan.inventory.web;
 
+import com.kervan.inventory.application.StockAdjustmentService;
 import com.kervan.inventory.application.StockReceiptService;
 import com.kervan.inventory.domain.model.StockItem;
+import com.kervan.inventory.web.dto.AdjustStockRequest;
 import com.kervan.inventory.web.dto.ReceiveStockRequest;
+import com.kervan.inventory.web.dto.StockAdjustmentResponse;
 import com.kervan.inventory.web.dto.StockResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +17,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.security.Principal;
+import java.util.List;
 
 /**
  * Stok REST API'si. İnce bir katman: HTTP ↔ application çevirisi yapar, iş kuralı içermez.
@@ -27,9 +33,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class StockController {
 
     private final StockReceiptService service;
+    private final StockAdjustmentService adjustments;
 
-    public StockController(StockReceiptService service) {
+    public StockController(StockReceiptService service, StockAdjustmentService adjustments) {
         this.service = service;
+        this.adjustments = adjustments;
     }
 
     /**
@@ -56,5 +64,38 @@ public class StockController {
                 .map(StockResponse::from)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Sayım düzeltmesi (ADR-0021).
+     *
+     * <p>Mal kabulünden ayrı bir uç, çünkü ayrı bir şey: kabul bir olayı kaydeder,
+     * düzeltme bir iddiayı. Gerekçe zorunlu ve kim yaptığı kaydedilir.
+     *
+     * <p><b>Kimlik istekten okunmuyor, token'dan geliyor.</b> Gövdeye bir "kim" alanı
+     * koymak, denetim izini istemcinin doldurduğu bir alana bağlamak olurdu — yani
+     * isteyenin başkasının adına düzeltme yazabilmesi demek. {@code Principal}'ın adı
+     * JWT'nin {@code sub} alanıdır (bkz. JwtRoleConverter).
+     */
+    @PostMapping("/{sku}/adjustments")
+    @Operation(summary = "Sayım düzeltmesi: stoğu artırır ya da azaltır (gerekçe zorunlu)")
+    public StockResponse adjust(@PathVariable String sku,
+                                @Valid @RequestBody AdjustStockRequest req,
+                                Principal caller) {
+        StockItem updated = adjustments.adjust(
+                req.adjustmentId(), sku, req.delta(), req.reason(), req.note(), caller.getName());
+        return StockResponse.from(updated);
+    }
+
+    /**
+     * Düzeltme geçmişi — denetim izi.
+     *
+     * <p>Okunamayan bir denetim izi, denetim izi değildir. En yeniden eskiye, en fazla
+     * {@link StockAdjustmentService#HISTORY_LIMIT} kayıt.
+     */
+    @GetMapping("/{sku}/adjustments")
+    @Operation(summary = "Bir SKU'nun düzeltme geçmişi (en yeniden eskiye)")
+    public List<StockAdjustmentResponse> history(@PathVariable String sku) {
+        return adjustments.history(sku).stream().map(StockAdjustmentResponse::from).toList();
     }
 }

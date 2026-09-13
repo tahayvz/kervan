@@ -94,6 +94,46 @@ class StockItemTest {
     }
 
     @Test
+    @DisplayName("düzeltme satılabiliri artırır ve azaltır, ayrılmışa dokunmaz")
+    void adjustChangesOnlyAvailable() {
+        StockItem afterReserve = item.reserve(4);   // available 6, reserved 4
+
+        assertThat(afterReserve.adjust(-5).available()).isEqualTo(1);
+        assertThat(afterReserve.adjust(-5).reserved()).isEqualTo(4);
+        assertThat(afterReserve.adjust(3).available()).isEqualTo(9);
+    }
+
+    @Test
+    @DisplayName("düzeltme satılabiliri EKSİYE düşüremez")
+    void adjustCannotGoNegative() {
+        // Sessizce sıfıra çekmek yanlış olurdu: "5 tane kırıldı" denildiğinde elde 3
+        // varsa gerçek dünyada bir şey daha yanlış demektir ve yuvarlamak onu gizler.
+        StockItem afterReserve = item.reserve(4);   // available 6
+
+        assertThatThrownBy(() -> afterReserve.adjust(-7))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("eksiye");
+    }
+
+    @Test
+    @DisplayName("düzeltme sıfır olamaz")
+    void adjustRejectsZero() {
+        assertThatThrownBy(() -> item.adjust(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("düzeltme ayrılmış miktarı ASLA azaltmaz")
+    void adjustNeverTouchesReserved() {
+        // Rezerve mal bir müşteriye söz verilmiştir. Sayım farkını oradan düşmek,
+        // siparişi olan birinin malını sessizce almak olurdu.
+        StockItem allReserved = new StockItem("SKU-1", 0, 10);
+
+        assertThatThrownBy(() -> allReserved.adjust(-1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(allReserved.adjust(5).reserved()).isEqualTo(10);
+    }
+
+    @Test
     @DisplayName("taşma sessizce negatife dönmez, hata verir")
     void receiveRejectsOverflow() {
         // Math.addExact olmasaydı sonuç negatife sarar, StockItem kurucusu da bunu

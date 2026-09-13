@@ -34,6 +34,7 @@ kararı veren kişi ekipten ayrıldığında gerekçe onunla birlikte gitmez.
 - [ADR-0018](0018-cd-verify-the-deployment-not-deploy-it.md) — CD dağıtımı doğrular, otomatik dağıtım yapmaz
 - [ADR-0019](0019-stock-enters-by-receipt.md) — Stok makbuzla girer, mutlak atamayla değil
 - [ADR-0020](0020-saga-tested-across-three-real-services.md) — Saga üç gerçek servisle test edilir, CDC taşıması taklit edilir
+- [ADR-0021](0021-stock-corrections-are-reasoned-and-attributed.md) — Stok düzeltmesi gerekçeli ve sahiplidir
 
 ## Yeni ADR nasıl yazılır
 `NNNN-kisa-baslik.md` adıyla, `_template.md`'yi kopyalayarak.

@@ -429,8 +429,10 @@ geçiyordu — yani başka bir servisin veritabanına dışarıdan yazıyordu. A
 ucu var (`POST /api/v1/stock/{sku}/receipts`), makbuz kimliğiyle idempotent, yalnızca
 `ADMIN`. `seed.sh` veritabanına hiç dokunmuyor.
 
-Yeni açık iş: stok **düzeltmesi** (hasarlı mal, sayım farkı) hâlâ yok. Bilinçli olarak
-ertelendi — "kim, hangi gerekçeyle düzeltebilir ve nasıl denetlenir" ayrı bir sorudur.
+**Stok düzeltmesi — KAPANDI (ADR-0021).** Hasarlı mal, sayım farkı, raf ömrü.
+`POST /api/v1/stock/{sku}/adjustments` + denetim izi (`GET` ile okunabilir). Gerekçe
+zorunlu ve sınırlı listeden; düzeltmeyi yapan token'dan alınır; stok kaydı yoksa 404;
+ayrılmış miktara dokunulmaz.
 
 **Üç servisin birlikte çalıştığı test — KAPANDI (ADR-0020).** `saga-e2e-tests` modülü
 order, inventory ve payment'ı aynı JVM'de, gerçek PostgreSQL ve gerçek Kafka üzerinde

@@ -36,9 +36,34 @@ arasına ikinci bir istek girebilir ve ikisi de "yeni" sonucuna varabilirdi. JPA
 `save()`'i burada özellikle yanlış olurdu: var olan kimliği **günceller**, yani tekrar
 gelen makbuz "yeni kayıt" sanılır ve miktar ikinci kez eklenirdi.
 
-**Stok düzeltmesi YOK** (hasarlı mal, sayım farkı). Bilinçli: "kim, hangi gerekçeyle
-düzeltebilir ve bu nasıl denetlenir" ayrı bir sorudur, mal kabulüyle karıştırmak ikisini
-de bulandırırdı.
+## Stok düzeltmesi: sayım farkı (ADR-0021)
+
+Mal kabulü "dışarıdan mal geldi" der. Düzeltme farklı bir şeyi kaydeder: "bizim sayımız
+yanlışmış". Biri bir **olay**, diğeri bir **iddia**.
+
+```
+POST /api/v1/stock/{sku}/adjustments   { adjustmentId, delta, reason, note? }
+GET  /api/v1/stock/{sku}/adjustments
+```
+
+**Gerekçe zorunlu ve sınırlı bir listeden:** `COUNT_CORRECTION`, `DAMAGED`, `EXPIRED`,
+`SHRINKAGE`, `RETURNED_TO_SUPPLIER`, `OTHER`. Serbest metin olsaydı "kırık", "kirik",
+"hasarlı", "damaged" hepsi ayrı değer olur ve "bu ay ne kadar mal kırıldı" sorusu hiç
+cevaplanamazdı. `OTHER` seçilirse açıklama da zorunlu — gerekçesiz bir "diğer", gerekçe
+yazmamakla aynıdır.
+
+**Düzeltmeyi yapan token'dan alınır, gövdeden değil.** Gövdeye bir "kim" alanı koymak,
+denetim izini istemcinin doldurduğu bir alana bağlamak olurdu.
+
+**Stok kaydı yoksa 404.** Mal kabulü kaydı kendisi açar; düzeltme açamaz. Var olmayan
+bir sayı düzeltilemez.
+
+**Ayrılmış miktara dokunulmaz.** Orada duran mal bir müşteriye söz verilmiştir. Sayım
+farkını oradan düşmek, siparişi olan birinin malını sessizce almak olurdu. Rezerve mal
+gerçekten kaybolduysa doğru cevap stoğu düzeltmek değil, o siparişi iptal etmektir.
+
+**Eksiye düşen düzeltme reddedilir, sıfıra yuvarlanmaz.** "5 tane kırıldı" denildiğinde
+elde 3 varsa gerçek dünyada bir şey daha yanlış demektir; yuvarlamak onu gizler.
 
 ## Akış
 

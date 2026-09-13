@@ -1,5 +1,6 @@
 package com.kervan.inventory.web;
 
+import com.kervan.inventory.domain.model.StockNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -43,6 +44,17 @@ public class GlobalExceptionHandler {
                 "İstek gövdesi geçersiz.", "validation-error");
         pd.setProperty("errors", errors);
         return pd;
+    }
+
+    /**
+     * Düzeltme, stok kaydı hiç açılmamış bir SKU için istendi.
+     *
+     * <p>Mal kabulünde bu durum hata değildir (kabul kaydı kendisi açar); düzeltmede
+     * hatadır, çünkü var olmayan bir sayı düzeltilemez.
+     */
+    @ExceptionHandler(StockNotFoundException.class)
+    public ProblemDetail handleStockNotFound(StockNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Stok kaydı yok", ex.getMessage(), "stock-not-found");
     }
 
     /** Alan modelinin kural ihlalleri (örn. miktar pozitif değil). */

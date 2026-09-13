@@ -60,6 +60,32 @@ public record StockItem(String sku, int available, int reserved) {
     }
 
     /**
+     * Sayım düzeltmesi: satılabilir miktarı verilen kadar artırır ya da azaltır (ADR-0021).
+     *
+     * <p><b>{@code reserved}'a dokunmaz</b> ve bu bilinçli. Ayrılmış miktar saga'nın
+     * sahipliğindedir: orada duran şey bir müşteriye söz verilmiştir. Sayım farkını
+     * oradan düşmek, siparişi olan birinin malını sessizce almak olurdu. Rezerve mal
+     * gerçekten kaybolduysa doğru cevap stoğu düzeltmek değil, o siparişi iptal etmektir.
+     *
+     * @throws IllegalArgumentException delta sıfırsa; ya da azaltma satılabiliri
+     *     eksiye düşürecekse. İkincisi sessizce sıfıra çekilmez: "5 tane kırıldı"
+     *     denildiğinde elde 3 varsa, gerçek dünyada bir şey daha yanlış demektir ve
+     *     bunu yuvarlamak o hatayı gizler.
+     */
+    public StockItem adjust(int delta) {
+        if (delta == 0) {
+            throw new IllegalArgumentException("Düzeltme miktarı sıfır olamaz");
+        }
+        int result = Math.addExact(available, delta);
+        if (result < 0) {
+            throw new IllegalArgumentException(
+                    "Düzeltme satılabilir miktarı eksiye düşürürdü: sku=%s mevcut=%d duzeltme=%d"
+                            .formatted(sku, available, delta));
+        }
+        return new StockItem(sku, result, reserved);
+    }
+
+    /**
      * Ayrılmış miktarı satılabilire geri taşır (Saga telafisi).
      *
      * <p>Tutulandan fazlasını geri bırakmak stok yaratmak olurdu; bu bir hesap
