@@ -81,10 +81,18 @@ http_ok_retry() { # url [deneme]
 }
 
 # Kumedeki TOPLAM yeniden baslatma sayisi.
+#
+# awk SATIRDAKI BUTUN alanlari topluyor, yalnizca ilkini degil. jsonpath pod basina
+# TEK satir uretir ama o satirda pod'un HER konteyneri icin bir sayi vardir:
+#     tek konteynerli pod -> "0"
+#     iki konteynerli pod -> "0 2"
+# `s+=$1` yazilsaydi ikinci konteynerin cokmeleri hic sayilmazdi. Bugun her pod tek
+# konteyner oldugu icin sonuc tesadufen dogru olurdu; yarin bir sidecar (OTel ajani,
+# mesh proxy'si) eklendiginde 6. bolum, var olma sebebi olan arizada yesil kalirdi.
 restart_total() {
   kc get pods -l app.kubernetes.io/part-of=kervan \
     -o jsonpath='{range .items[*]}{.status.containerStatuses[*].restartCount}{"\n"}{end}' \
-    | awk '{s+=$1} END {print s+0}'
+    | awk '{for (i = 1; i <= NF; i++) s += $i} END {print s+0}'
 }
 
 # ---------------------------------------------------------------------------

@@ -287,8 +287,9 @@ gösterilmeli.**
   dâhil) çıktı olarak yüklenmesi.
 
 **Neden gerçek bir ortama dağıtım yok:** Dağıtılacak yer yok; elde tek sunucu var ve
-o başka bir üretim sitesini çalıştırıyor. GHCR'a imaj gönderme de eklenmedi —
-değerli ama *farklı* bir boşluğu kapatır, çalıştığını kanıtlamaz (ADR-0018).
+o başka bir üretim sitesini çalıştırıyor. **GHCR'a imaj yayınlama da kapsam dışı ve
+bu kalıcı bir karar** — imajın indirileceği bir yer yok ve yayınlamak paketleri
+herkese açık hâle getirirdi (ADR-0018).
 
 **Kazanım:** Faz 9 ve 10'da çıkan on yedi hatanın çoğunun ortak sebebi tek cümleydi:
 *CI imajı derliyor ama çalıştırmıyor.* O boşluk kapandı. Bedeli: CI süresi ~13

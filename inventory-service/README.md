@@ -150,8 +150,9 @@ docker compose -f ../infra/docker/docker-compose.yml up -d postgres kafka schema
 mvn -pl inventory-service spring-boot:run
 ```
 
-Servis `http://localhost:8084` (yalnızca actuator; dışa açık REST API'si yok — bu
-servis mesajla konuşur).
+Servis `http://localhost:8084`. İki tür trafiği var: saga komutları Kafka'dan gelir,
+stok girişi ve görüntüleme ise HTTP'den (yukarıdaki *Stok girişi* bölümü). Actuator
+her zamanki gibi ayrı yönetim portunda: `http://localhost:9084`.
 
 Konektörü kaydet:
 

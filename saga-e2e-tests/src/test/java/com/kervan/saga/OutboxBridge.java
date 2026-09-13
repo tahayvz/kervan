@@ -12,8 +12,10 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -73,6 +75,8 @@ final class OutboxBridge {
     private final List<Source> sources = new ArrayList<>();
     /** Taşınmış satırlar. Debezium da her satırı bir kez yayınlar. */
     private final Set<String> published = new HashSet<>();
+    /** Kaynak başına en son basılan hata; aynısını tekrar tekrar basmamak için. */
+    private final Map<String, String> lastError = new HashMap<>();
 
     private ScheduledExecutorService scheduler;
     private Producer<String, byte[]> producer;
@@ -119,10 +123,23 @@ final class OutboxBridge {
             try {
                 drain(source);
             } catch (Exception e) {
-                // Uygulamalar henüz açılmamışken tablo yok olabilir. Sessiz geçmek
-                // doğru: bu bir taşıyıcı, bir iddia değil. Gerçek bir sorun varsa
-                // testin beklediği olay gelmez ve test kırılır.
+                // Uygulamalar açılana kadar tablo henüz yoktur; bu beklenen bir
+                // durumdur ve her 200ms'de bir ekrana basılmamalı. Ama SESSİZ de
+                // kalınmamalı: köprü çalışmazsa test yalnızca zaman aşımına uğrar ve
+                // sebebini hiçbir yerde yazmaz.
+                //
+                // Orta yol: aynı hata tekrarlarken susuyoruz, hata DEĞİŞTİĞİNDE bir
+                // satır basıyoruz. Böylece "tablo yok" gürültüsü bir kez görünür,
+                // arkasından gelen gerçek bir arıza da görünür.
+                reportOnce(source, e);
             }
+        }
+    }
+
+    private void reportOnce(Source source, Exception e) {
+        String message = e.getClass().getSimpleName() + ": " + e.getMessage();
+        if (!message.equals(lastError.put(source.topic(), message))) {
+            System.err.println("[outbox-bridge] " + source.topic() + " -> " + message);
         }
     }
 
@@ -136,8 +153,8 @@ final class OutboxBridge {
              ResultSet rows = statement.executeQuery()) {
 
             while (rows.next()) {
-                String id = rows.getString("id");
-                if (!published.add(source.topic() + "/" + id)) {
+                String key = source.topic() + "/" + rows.getString("id");
+                if (published.contains(key)) {
                     continue;
                 }
                 ProducerRecord<String, byte[]> record = new ProducerRecord<>(
@@ -147,9 +164,20 @@ final class OutboxBridge {
                 if (traceParent != null) {
                     record.headers().add("traceparent", traceParent.getBytes(StandardCharsets.UTF_8));
                 }
-                producer.send(record);
+
+                // GONDERIM ONCE DOGRULANIR, SONRA "tasindi" diye isaretlenir.
+                //
+                // Ters sirada yazilmisti ve sessiz bir veri kaybi uretiyordu: gonderim
+                // basarisiz olsa bile satir isaretlenmis oluyor, bir sonraki turda
+                // atlaniyor ve o saga cevabi BIR DAHA HIC gonderilmiyordu. Test 60
+                // saniye bekleyip ciplak bir ConditionTimeout ile dusuyordu -- Kafka'dan,
+                // satirdan, kaybolan mesajdan tek kelime etmeden.
+                //
+                // send() asenkrondur; donen Future beklenmezse hata FARK EDILMEZ.
+                // Burada throughput onemsiz, dogruluk onemli: her satir beklenir.
+                producer.send(record).get(10, TimeUnit.SECONDS);
+                published.add(key);
             }
-            producer.flush();
         }
     }
 }

@@ -49,11 +49,16 @@ Gerçek bir ortama otomatik dağıtım **yoktur** ve bir kayıt defterine imaj
 
 ## Değerlendirilen alternatifler (Considered options)
 
-- **GHCR'a imaj gönderme + sürüm etiketleme**
+- **GHCR'a imaj gönderme + sürüm etiketleme** — *reddedildi*
   - Artı: dağıtılabilir, sürümlenmiş bir çıktı üretir. Gerçek bir CD adımı.
-  - Eksi: **çalıştığını kanıtlamaz.** Kapattığı boşluk farklı. Doğrulama işinin
-    yerine geçmez; yanına eklenir. Şu an eklenmedi: bu fazın tek bir sorusu var
-    ve o soru "paket kümede gerçekten çalışıyor mu".
+  - Eksi: **çalıştığını kanıtlamaz.** Kapattığı boşluk farklı; doğrulama işinin
+    yerine geçmez.
+  - Eksi: imajları yayınlamak, onları **herkese açık** hâle getirir. Depo public
+    olduğu için paketler de public olurdu. Teknik bir risk yok (imajda sır
+    bulunmaz, şifreler dışarıdan ayar olarak gelir) ama görünürlük bir sahiplik
+    kararıdır ve proje sahibi bunu istemedi.
+  - **Karar:** eklenmeyecek. Bu bir erteleme değil; imajın indirileceği bir yer
+    yok, dolayısıyla yayınlamak yalnızca görünür bir çıktı üretmek olurdu.
 
 - **Gerçek bir ortama otomatik dağıtım**
   - Dağıtılacak yer yok. Eldeki tek sunucu başka bir üretim sitesini çalıştırıyor;

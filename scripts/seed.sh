@@ -29,9 +29,15 @@ GATEWAY="${KERVAN_GATEWAY:-http://localhost:8000}"
 KEYCLOAK="${KERVAN_KEYCLOAK:-http://localhost:8080}"
 STOCK_PER_SKU="${KERVAN_SEED_STOCK:-100000}"
 
-# Tohumlama makbuzlarinin onegi. Ayni onekle ikinci kez kosulursa stok TEKRAR
-# EKLENMEZ: makbuz kimligi ayni kalir ve uc idempotenttir (ADR-0019).
-# Her kosuda taze stok isteniyorsa onek degistirilir.
+# Tohumlama makbuzlarinin onegi.
+#
+# AYNI ONEKLE IKINCI KEZ KOSULURSA STOK TEKRAR EKLENMEZ. Makbuz kimligi ayni kalir
+# ve uc idempotenttir (ADR-0019) -- yani ikinci kosu hicbir sey yapmaz ama yine 200
+# doner. Bu bilincli: aglar koptugunda betigi yeniden calistirmak guvenli olmali.
+#
+# Bedeli su: yuk testi stogu tuketttikten sonra betigi tekrar kosturmak stogu
+# TAZELEMEZ. Bu yuzden asagida rapor, eklenen miktari degil KUMEDEKI GERCEK stogu
+# yaziyor ve beklenenin altindaysa ne yapilacagini soyluyor.
 RECEIPT_PREFIX="${KERVAN_SEED_RECEIPT_PREFIX:-seed}"
 
 say() { printf '%s\n' "$*" >&2; }
@@ -135,18 +141,32 @@ say "  ${#SKUS[@]} urun olusturuldu ve yayina alindi."
 say "Mal kabulu yapiliyor (SKU basina ${STOCK_PER_SKU})..."
 STOCK_OK=0
 STOCK_FAIL=0
+# Kumedeki GERCEK stogun en dusugu. Cevabin govdesinden okunuyor; "ne gonderdim"
+# degil "ne oldu" raporlanacak.
+MIN_AVAILABLE=""
 for SKU in "${SKUS[@]}"; do
-  CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+  BODY=$(curl -sS -w '\n%{http_code}' -X POST \
     "${GATEWAY}/api/v1/stock/${SKU}/receipts" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H 'Content-Type: application/json' \
     -d "{\"receiptId\":\"${RECEIPT_PREFIX}-${SKU}\",\"quantity\":${STOCK_PER_SKU}}")
 
-  if [ "${CODE}" = "200" ]; then
-    STOCK_OK=$((STOCK_OK + 1))
-  else
+  CODE="${BODY##*$'\n'}"
+  JSON="${BODY%$'\n'*}"
+
+  if [ "${CODE}" != "200" ]; then
     STOCK_FAIL=$((STOCK_FAIL + 1))
     say "  ${SKU}: mal kabulu basarisiz (HTTP ${CODE})"
+    continue
+  fi
+
+  STOCK_OK=$((STOCK_OK + 1))
+  AVAILABLE=$(printf '%s' "${JSON}" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["available"])' 2>/dev/null || echo "")
+  if [ -n "${AVAILABLE}" ]; then
+    if [ -z "${MIN_AVAILABLE}" ] || [ "${AVAILABLE}" -lt "${MIN_AVAILABLE}" ]; then
+      MIN_AVAILABLE="${AVAILABLE}"
+    fi
   fi
 done
 
@@ -158,7 +178,20 @@ fi
 say ""
 say "Tohumlama bitti."
 say "  urun    : ${#SKUS[@]}"
-say "  stok    : ${STOCK_OK} SKU, her birine ${STOCK_PER_SKU}"
+# "Ne gonderdim" degil "kumede ne var". Ikisi ayni degil: ayni onekle ikinci kez
+# kosulunca hicbir sey eklenmez ve eski betik yine "her birine 100000" diye yazardi.
+if [ -n "${MIN_AVAILABLE}" ]; then
+  say "  stok    : ${STOCK_OK} SKU; en dusuk satilabilir miktar ${MIN_AVAILABLE}"
+  if [ "${MIN_AVAILABLE}" -lt "${STOCK_PER_SKU}" ]; then
+    say ""
+    say "  NOT: stok beklenenin altinda. Muhtemelen bu betik daha once kosmus ve"
+    say "       araya bir yuk testi girmis. Ayni makbuz ikinci kez eklenmez."
+    say "       Taze stok icin onegi degistir:"
+    say "         KERVAN_SEED_RECEIPT_PREFIX=kosu2 scripts/seed.sh"
+  fi
+else
+  say "  stok    : ${STOCK_OK} SKU (miktar okunamadi)"
+fi
 say ""
 say "Arama indeksinin dolmasi birkac saniye surer (CDC -> Kafka -> Elasticsearch)."
 say "Kontrol:  curl -s '${GATEWAY}/api/v1/search/products?q=Nike' | head -c 300"
