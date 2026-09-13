@@ -27,9 +27,11 @@ kervan/                (parent pom — packaging: pom)
 - **Poly-repo (her servis ayrı repo):** Gerçek kurumsal büyük ölçekte yaygın; ekip
   bağımsızlığı yüksek. Ancak tek kişilik projede sürüm koordinasyonu ve ortak
   sözleşme paylaşımı zorlaşır, CI kurulumu çoğalır. → **Elendi (bu ölçek için).**
-- **Gradle multi-project:** Geçerli bir alternatif; build performansı iyi. Ancak
-  hedef iş ilanlarında Maven daha baskın ve okunması daha standart. → **Elenmedi
-  ama Maven tercih edildi.**
+- **Gradle multi-project:** Geçerli bir alternatif; artımlı build performansı daha
+  iyi. Ancak bu projede build mantığı basit: özel görev yok, kod üretimi eklentiyle
+  çözülüyor. Gradle'ın esnekliğinin karşılığı burada yok; Maven'ın bildirimsel POM'u
+  reactor sırasını ve sürüm yönetimini daha okunur bırakıyor. → **Elenmedi ama Maven
+  tercih edildi.**
 - **Maven multi-module (seçilen):** Merkezî sürüm yönetimi, tek `mvn` ile tüm
   reaktör, ortak modül paylaşımı kolay.
 

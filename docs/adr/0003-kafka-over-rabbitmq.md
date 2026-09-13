@@ -36,5 +36,5 @@ ile yönetilir.
   Kafka'dan beslenir; Debezium ile CDC doğal; partition ile ölçek.
 - **Olumsuz / ödünler:** Kafka operasyonel olarak RabbitMQ'dan ağırdır (broker,
   Zookeeper/KRaft, Schema Registry). Lokalde Compose ile, prod'da K8s ile yönetilir.
-- **Kurumsal karşılığı:** "Kafka mı RabbitMQ mı?" ayrımı, mesajlaşma omurgası seçen
-  her ekibin verdiği ilk karardır; gerekçesi yazılı olmadığında tartışma tekrar eder.
+- **Neden bu ADR yazıldı:** "Kafka mı RabbitMQ mı?" mesajlaşma omurgası seçerken
+  verilen ilk karardır; gerekçesi yazılı olmadığında tartışma tekrar eder.

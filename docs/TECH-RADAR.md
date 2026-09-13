@@ -2,7 +2,7 @@
 
 Bir lead'in en çok sorulduğu soru: **"Neden bunu seçtin?"**
 Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**,
-(3) **hangi alternatifi neden elediği**, (4) **kurumsal karşılığı** ile açıklar.
+(3) **hangi alternatifi neden elediği** ile açıklar.
 
 > Kural: Hiçbir teknoloji "popüler olduğu için" seçilmedi. Her biri somut bir
 > ihtiyaca cevaptır ve tamamı **açık kaynak / ücretsiz**tir (0 bütçe).
@@ -16,16 +16,20 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 - **Neden:** LTS sürüm. **Virtual Threads** (Project Loom) ile I/O yoğun servislerde
   thread-per-request modelini reaktif karmaşasına girmeden ölçekler. Records,
   pattern matching, sealed types ile daha az boilerplate.
-- **Alternatif elenmesi:** Kotlin harika ama hedef ilanların çoğu "Java"; Go/Node
-  ekosistem olgunluğunda (Spring) geride.
-- **Kurumsal karşılığı:** Büyük ölçekli e-ticaret backend'lerinde Java baskın dil.
+- **Alternatif elenmesi:** Kotlin'in asıl kazancı boilerplate azaltmaktı; Java 21
+  records + pattern matching + sealed types ile bunun büyük kısmını zaten veriyor,
+  geriye kalan kazanç ikinci bir dil katmanının bedelini karşılamıyor. Go/Node'da bu
+  projenin dayandığı bütünleşik yığın (Data + Security + Gateway + Micrometer aynı
+  ekosistemde) yok.
 
 ### Spring Boot 3.x
 - **Problem:** Servisleri hızlı, standart ve üretime hazır kurmak.
-- **Neden:** De-facto kurumsal Java standardı; auto-config, Actuator (health/metrics),
-  geniş ekosistem (Data, Security, Cloud). Native OTel/Micrometer entegrasyonu.
-- **Alternatif:** Quarkus/Micronaut daha hızlı boot verir ama ekosistem/işgücü
-  havuzu Spring kadar geniş değil.
+- **Neden:** Otomatik yapılandırma, Actuator (sağlık/metrik), ve bu projenin ihtiyaç
+  duyduğu her parçanın (Data, Security, Cloud Gateway, Micrometer/OTel köprüsü) aynı
+  ekosistemde hazır olması.
+- **Alternatif:** Quarkus/Micronaut daha hızlı açılır ve daha az bellek kullanır.
+  Bedeli: burada kullanılan entegrasyonların bir kısmı ya yok ya daha az olgun —
+  kazanç açılış süresinde, kayıp entegrasyon yüzeyinde.
 
 ---
 
@@ -40,7 +44,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 - **Alternatif elenmesi:** RabbitMQ mükemmel bir **message broker** ama **event
   streaming** (kalıcılık, replay, log compaction, CDC hedefi) için Kafka daha uygun.
   *(Bkz. ADR-0003 — ikisinin farkı ve neden Kafka.)*
-- **Kurumsal karşılığı:** Yüksek hacimli e-ticaret ve pazaryeri sistemlerinde yaygın standart.
 
 ### Confluent Schema Registry + Apache Avro
 - **Problem:** Event şeması zamanla değişir. Üretici yeni alan eklerse eski tüketiciler
@@ -49,7 +52,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   merkezî tutup **backward/forward compatibility** kontrolü yapar. Üretici uyumsuz
   şema publish edemez.
 - **Alternatif:** Protobuf de iyi; Avro Kafka/Confluent ekosisteminde daha yerleşik.
-- **Kurumsal karşılığı:** Confluent platformunu kullanan kurumlarda standart yığın.
 - **Durum:** Kullanımda. Şemalar `event-contracts` modülünde; uyumluluk modu BACKWARD.
   Registry'nin kuralı ayrıca test zamanında da doğrulanıyor (`SchemaEvolutionTest`),
   böylece uyumsuz değişiklik çalışan sisteme değil CI'ya çarpıyor. *(ADR-0008)*
@@ -60,7 +62,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   taşır. Uygulama Kafka'ya hiç dokunmaz; **Transactional Outbox** deseniyle birlikte
   event kaybını/çiftlenmesini kökten çözer.
 - **Alternatif:** Uygulama içi "publish after commit" — race condition ve kayıp riski.
-- **Kurumsal karşılığı:** Kurumsal CDC pipeline'larında yaygın tercih.
 
 ---
 
@@ -88,9 +89,7 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   ile change streams üzerinden CDC → Kafka mümkün (Catalog → Search akışının kaynağı).
 - **Alternatif elenmesi:** Postgres + `jsonb` de olurdu (tek teknoloji sadeliği) ama
   kategori-bazlı zengin sorgu/indeksleme ve belge modelleme MongoDB'de daha doğal;
-  ayrıca proje **document DB yetkinliğini** açıkça göstermeyi hedefliyor. *(Bkz. ADR-0006.)*
-- **Kurumsal karşılığı:** Ürün kataloğu, MongoDB'nin ders-kitabı kullanım alanıdır;
-  büyük e-ticarette çok yaygın.
+  ayrıca proje veri ailelerinin dördünü de göstermeyi hedefliyor. *(Bkz. ADR-0006.)*
 
 ### Mongock — MongoDB migration
 - **Problem:** MongoDB "schema-less" olsa da veri/indeks değişiklikleri **versiyonlu ve
@@ -98,7 +97,8 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 - **Neden:** Mongock, MongoDB için Flyway/Liquibase muadili: kod-tabanlı, sıralı,
   bir-kez-çalışan changeset'ler; Spring Boot ile entegre; indeks oluşturma/veri backfill
   için idealdir.
-- **Kurumsal karşılığı:** "NoSQL'de migration yapılmaz" yanılgısını kıran, olgun ekip refleksi.
+- **Not:** Şemasız depo, "migration gerekmez" demek değildir. İndeksler ve veri
+  dönüşümleri yine sıralı, bir kez çalışan ve versiyonlanmış olmalı.
 
 ### Flyway
 - **Problem:** Şema değişikliğini elle yapmak = ortamlar arası tutarsızlık = felaket.
@@ -111,7 +111,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   ortamda kilit gerekir, (3) rate-limit sayaçları hızlı olmalı.
 - **Neden:** In-memory, mikrosaniye erişim; cache + dağıtık kilit (SETNX/Redlock) +
   rate-limit (token bucket) + oturum — hepsi tek araçta.
-- **Kurumsal karşılığı:** Neredeyse her büyük e-ticarette cache/kilit/rate-limit için var.
 
 ### Elasticsearch
 - **Problem:** Çok kriterli, tam-metin, faceted arama. "44 numara siyah Nike 1000-2000 TL"
@@ -120,7 +119,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   relevance scoring, typo tolerance. CQRS okuma modeli olarak Kafka'dan beslenir.
 - **Alternatif:** OpenSearch (Elasticsearch fork'u, tamamen açık lisans) — kolayca
   geçilebilir; API büyük oranda uyumlu.
-- **Kurumsal karşılığı:** E-ticaret aramasının fiili standardı.
 
 ---
 
@@ -139,7 +137,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 - **Neden:** Açık kaynak, olgun IAM; OAuth2/OIDC, realm/rol/client, token issuance,
   social login. Servisler stateless **resource-server** olarak sadece JWT doğrular.
 - **Alternatif:** Auth0/Okta (SaaS, ücretli). Keycloak self-hosted ve **ücretsiz**.
-- **Kurumsal karşılığı:** İş ilanlarında "Keycloak / OAuth2" çok sık geçer.
 
 ---
 
@@ -184,7 +181,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
   Debezium/logical replication yok). Prod'da patlar.
 - **Neden:** Testcontainers, testte **gerçek** Postgres/Kafka/Elasticsearch'i Docker'da
   ayağa kaldırır. "Test ettiğin şey prod'daki şey" olur.
-- **Kurumsal karşılığı:** Ciddi ekiplerde integration test standardı.
 
 ### WireMock / Awaitility
 - **WireMock:** Dış HTTP servisleri deterministik taklit etmek (contract testleri).
@@ -204,7 +200,6 @@ Bu belge her teknolojiyi (1) **hangi problemi çözdüğü**, (2) **neden bunu**
 - **Problem:** Kurumsal ölçek/deploy/otomatik iyileşme/otomatik ölçek.
 - **Neden:** K8s fiili orkestrasyon standardı; Helm ile chart'lar parametrize edilir
   (Deployment, Service, ConfigMap, Secret, Ingress, HPA). Lokal doğrulama için Kind.
-- **Kurumsal karşılığı:** Spring Boot servislerini K8s'e taşımak kurumsal standart iş akışı.
 
 ### GitHub Actions
 - **Problem:** Her commit otomatik build/test/tarama/imaj.
