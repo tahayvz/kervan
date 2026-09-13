@@ -13,6 +13,7 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -172,9 +173,44 @@ class OrderFlowIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * Aranan kaydı bulana kadar yoklar; <b>çözemediği kayıtları atlar</b>.
+     *
+     * <h2>Neden atlamak gerekiyor</h2>
+     * Bu konu paylaşılıyor: aynı JVM'deki başka test sınıfları da aynı Kafka
+     * konteynerine ve aynı konuya yazıyor. Tüketici {@code earliest}'ten okuduğu için
+     * onların kayıtlarına da çarpıyor ve bazıları bu tüketicinin çözebileceği biçimde
+     * değil — Confluent çerçevesi (sihirli bayt + şema kimliği) olmayan ham baytlar:
+     *
+     * <pre>
+     * RecordDeserialization Error ... kervan.orders.events-0 at offset 2
+     * Caused by: SerializationException: Unknown magic byte!
+     * </pre>
+     *
+     * <p>Belirti <b>sıraya bağlıydı</b>, o yüzden uzun süre görünmedi: Surefire'ın
+     * varsayılan sırası dosya sistemi sırasıdır ve işletim sistemine göre değişir.
+     * {@code -Dsurefire.runOrder=alphabetical} ile üreten sınıf önce koşuyor ve bu test
+     * düşüyordu. CI'nın sırası bir gün değişse, kod hiç değişmeden kırmızıya dönerdi.
+     *
+     * <h2>Neden atlamak DOĞRU davranış (burada)</h2>
+     * Üretimde çözülemeyen bir kaydı atlamak yanlış olurdu — orada ölü mektup konusu
+     * (DLT) var, çünkü o kayıt <em>bize ait</em> ve kaybolmamalı. Buradaki tüketicinin
+     * işi farklı: paylaşılan bir konuda <b>kendi</b> kaydını aramak. Başkasının kaydını
+     * okuyamaması bir arıza değil, beklenen durum.
+     *
+     * <p>Kaydın üzerinden atlama yöntemi hatanın kendi tavsiyesidir:
+     * <em>"please seek past the record to continue consumption"</em>. Atlamazsak
+     * tüketici aynı kayda sonsuza kadar takılır.
+     */
     private ConsumerRecord<String, OrderPlaced> pollFor(KafkaConsumer<String, OrderPlaced> consumer,
                                                         String key) {
-        ConsumerRecords<String, OrderPlaced> records = consumer.poll(Duration.ofMillis(500));
+        ConsumerRecords<String, OrderPlaced> records;
+        try {
+            records = consumer.poll(Duration.ofMillis(500));
+        } catch (RecordDeserializationException e) {
+            consumer.seek(e.topicPartition(), e.offset() + 1);
+            return null;
+        }
         for (ConsumerRecord<String, OrderPlaced> record : records) {
             if (key.equals(record.key())) {
                 return record;
