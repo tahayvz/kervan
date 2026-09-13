@@ -44,12 +44,27 @@ parça, bizim kodumuz olmayan tek parça.
 
 - **Testin içinde gerçek Debezium (Kafka Connect + Testcontainers)**
   - Artı: zinciri tam kapatır, CDC yapılandırmasını da doğrular.
-  - Eksi: Debezium imajının ARM sürümü geliştirme makinesinde çöküyor (günlük B20).
-    Test yerelde **hiç** koşturulamazdı — yalnızca CI'da. Faz 8'in bütün dersi
-    "çalıştır, varsayma" idi; koşturulamayan bir test o dersin tersi.
   - Eksi: Connect açılışı + konektör kaydı + günlükteki Debezium tuzakları (kalp
     atışı görevi öldürüyor, snapshot sırası, `header.converter`). En önemli test,
     aynı zamanda en kırılgan test olurdu.
+  - Eksi: geliştirme makinesinde **yavaş**. Debezium connect imajının ARM sürümündeki
+    JVM çöküyor (günlük B20); çalıştırmanın yolu amd64 sürümünü emülasyonla
+    koşturmak — compose'da zaten öyle yapılıyor.
+
+  > **Düzeltme (2026-09-13).** Bu ADR ilk yazıldığında burada "test yerelde **hiç**
+  > koşturulamazdı" deniyordu. Bu fazla kesindi ve yanlıştı: emülasyon Docker'da
+  > çalışıyor, nitekim compose bunu yapıyor. Doğrusu "koşar ama yavaş".
+  >
+  > Karar değişmiyor — gerekçe zayıflıyor ama diğer iki madde (kırılganlık ve süre)
+  > tek başına yeterli. Yine de bir ADR'de gerekçeyi olduğundan güçlü yazmak, o kararı
+  > sonra gözden geçirecek kişiyi yanıltır: "imkânsız" diye okunan şey bir daha
+  > sorgulanmaz, "yavaş" sorgulanır.
+  >
+  > Bu kapıyı açık bırakıyor: saga testini yavaşlatmadan, **yalnızca CDC taşımasını**
+  > sınayan ayrı ve dar bir test yazılabilir — outbox tablosuna bir satır, beklenen
+  > konuda `traceparent` başlığıyla bir mesaj. Yapılmadı çünkü emülasyonlu Connect
+  > her yerel `mvn verify`'a dakikalar ekler ve bu, proje sahibinin ödeyeceği bir
+  > bedeldir; kararı ona ait.
 
 - **Üç servisi ayrı süreç olarak çalıştırmak (`java -jar`)**
   - Artı: tam classpath yalıtımı; aşağıdaki üç çakışmanın hiçbiri yaşanmazdı.

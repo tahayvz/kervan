@@ -76,8 +76,11 @@ check "siparis ucu tokensiz 401"      http_ok "${GATEWAY}/api/v1/orders/yok" 401
 # KORUMALI olmasi gerekiyor. Kontrol, guvenligin yanlislikla gevsetilmesi
 # durumunda kirilir.
 check "stok ucu tokensiz 401"        http_ok "${GATEWAY}/api/v1/stock/yok" 401
-# Metrik ucu DISARIYA acik olmamali (ADR-0014). 404 bekleniyor: bu portta
-# actuator diye bir sey yok.
+# Metrik ucu DISARIYA acik olmamali (ADR-0014).
+#
+# Beklenen kod 401, 404 DEGIL: ag gecidi kimlik dogrulamasi yonlendirmeden ONCE
+# calisir, yani tokensiz istek rotaya hic ulasmadan reddedilir. (Bu yorum bir sure
+# "404 bekleniyor" diyordu ve koddaki 401 ile celisiyordu.)
 check "metrik ucu ana kapida YOK"     http_ok "${GATEWAY}/actuator/prometheus" 401
 
 say ""
