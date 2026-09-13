@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Stok düzeltmelerini sayar.
@@ -55,14 +56,37 @@ class MeteredStockAdjustmentRepository implements StockAdjustmentRepository {
         this.registry = registry;
     }
 
+    /**
+     * Ölçüm, kaydın yazılmasına değil <b>stoğun gerçekten değişmesine</b> bağlı.
+     *
+     * <p>Onay bekleyen bir düzeltme deftere yazılır ama stok değişmez (ADR-0022).
+     * Yazma anında sayılsaydı metrik henüz olmamış — ve belki hiç olmayacak, çünkü
+     * reddedilebilir — bir hareketi sayardı. Bekleyen kayıt onaylandığında ölçüm
+     * {@link #decideIfPending} içinde artıyor.
+     */
     @Override
     public boolean saveIfNew(StockAdjustment adjustment) {
         boolean isNew = delegate.saveIfNew(adjustment);
-        if (isNew) {
+        if (isNew && adjustment.status().movedStock()) {
             // Ölçüm yazmadan SONRA: yazma patlarsa hiçbir şey olmamıştır.
             summary(adjustment).record(Math.abs((long) adjustment.delta()));
         }
         return isNew;
+    }
+
+    /** Onay stoğu hareket ettirir, ret ettirmez; ölçüm de bunu izler. */
+    @Override
+    public int decideIfPending(StockAdjustment decided) {
+        int updated = delegate.decideIfPending(decided);
+        if (updated == 1 && decided.status().movedStock()) {
+            summary(decided).record(Math.abs((long) decided.delta()));
+        }
+        return updated;
+    }
+
+    @Override
+    public Optional<StockAdjustment> find(String adjustmentId) {
+        return delegate.find(adjustmentId);
     }
 
     @Override

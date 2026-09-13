@@ -35,6 +35,7 @@ class StockAdjustmentServiceTest {
     private static final String SKU = "SKU-1";
     private static final String ID = "adj-1";
     private static final String WHO = "yonetici-sub-123";
+    private static final int THRESHOLD = 100;
 
     private StockRepository stockRepository;
     private StockAdjustmentRepository adjustments;
@@ -44,12 +45,14 @@ class StockAdjustmentServiceTest {
     void setUp() {
         stockRepository = mock(StockRepository.class);
         adjustments = mock(StockAdjustmentRepository.class);
+        // Esik testlerde 100: uretimdeki varsayilanla ayni, boylece testler
+        // "gercekte ne oluyor" sorusunu cevapliyor.
         service = new StockAdjustmentService(stockRepository, adjustments,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), THRESHOLD);
     }
 
     private static StockAdjustment adjustment(String id, Instant at) {
-        return new StockAdjustment(id, SKU, -1, AdjustmentReason.DAMAGED, null, WHO, at);
+        return StockAdjustment.applied(id, SKU, -1, AdjustmentReason.DAMAGED, null, WHO, at);
     }
 
     private void stockIs(StockItem item) {

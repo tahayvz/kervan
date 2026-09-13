@@ -21,8 +21,8 @@ interface SpringDataStockAdjustmentRepository extends JpaRepository<StockAdjustm
      */
     @Modifying
     @Query(value = "INSERT INTO stock_adjustments "
-            + "(adjustment_id, sku, delta, reason, note, adjusted_by, adjusted_at) "
-            + "VALUES (:adjustmentId, :sku, :delta, :reason, :note, :adjustedBy, :adjustedAt) "
+            + "(adjustment_id, sku, delta, reason, note, adjusted_by, adjusted_at, status) "
+            + "VALUES (:adjustmentId, :sku, :delta, :reason, :note, :adjustedBy, :adjustedAt, :status) "
             + "ON CONFLICT (adjustment_id) DO NOTHING",
             nativeQuery = true)
     int insertIfNew(@Param("adjustmentId") String adjustmentId,
@@ -31,7 +31,29 @@ interface SpringDataStockAdjustmentRepository extends JpaRepository<StockAdjustm
                     @Param("reason") String reason,
                     @Param("note") String note,
                     @Param("adjustedBy") String adjustedBy,
-                    @Param("adjustedAt") Instant adjustedAt);
+                    @Param("adjustedAt") Instant adjustedAt,
+                    @Param("status") String status);
+
+    /**
+     * Kararı yazar; kayıt <b>beklemede değilse</b> hiçbir şey yapmaz.
+     *
+     * <p>{@code WHERE ... AND status = 'PENDING'} bir süs değil. "Önce oku, beklemede
+     * mi diye bak, sonra yaz" üç adımdır ve aralarına ikinci bir onaylayan girebilir;
+     * ikisi de beklemede görür, ikisi de yazar ve stok İKİ KEZ değişir. Koşulu
+     * yazmanın kendisine koymak o pencereyi kapatır: ikinciye sıfır satır döner.
+     *
+     * <p>Aynı desen bu serviste zaten iki kez kullanıldı — makbuz ve düzeltme
+     * eklemede {@code ON CONFLICT DO NOTHING}. Karar tek bir ifadeye bırakılıyor.
+     */
+    @Modifying
+    @Query(value = "UPDATE stock_adjustments "
+            + "SET status = :status, decided_by = :decidedBy, decided_at = :decidedAt "
+            + "WHERE adjustment_id = :adjustmentId AND status = 'PENDING'",
+            nativeQuery = true)
+    int decideIfPending(@Param("adjustmentId") String adjustmentId,
+                        @Param("status") String status,
+                        @Param("decidedBy") String decidedBy,
+                        @Param("decidedAt") Instant decidedAt);
 
     /** Denetim izinin ilk sayfası: en yeni kayıtlar. */
     List<StockAdjustmentEntity> findBySkuOrderByAdjustedAtDescAdjustmentIdDesc(String sku, Limit limit);

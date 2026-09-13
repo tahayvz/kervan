@@ -1,5 +1,8 @@
 package com.kervan.inventory.web;
 
+import com.kervan.inventory.domain.model.AdjustmentNotFoundException;
+import com.kervan.inventory.domain.model.AdjustmentNotPendingException;
+import com.kervan.inventory.domain.model.SelfApprovalException;
 import com.kervan.inventory.domain.model.StockNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -55,6 +58,38 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(StockNotFoundException.class)
     public ProblemDetail handleStockNotFound(StockNotFoundException ex) {
         return problem(HttpStatus.NOT_FOUND, "Stok kaydı yok", ex.getMessage(), "stock-not-found");
+    }
+
+    /** Onay ya da ret, var olmayan bir düzeltme için istendi. */
+    @ExceptionHandler(AdjustmentNotFoundException.class)
+    public ProblemDetail handleAdjustmentNotFound(AdjustmentNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Düzeltme yok", ex.getMessage(), "adjustment-not-found");
+    }
+
+    /**
+     * İsteyen kendi isteğini onaylamaya çalıştı.
+     *
+     * <p><b>403, 409 değil.</b> Bu bir durum çakışması değil bir <em>yetki</em>
+     * sınırı: kişi bu kaydı onaylama hakkına sahip değil, çünkü onu kendisi istedi.
+     * 409 dönmek "sonra tekrar dene" izlenimi verirdi; bu istek hiçbir zaman
+     * geçmeyecek.
+     */
+    @ExceptionHandler(SelfApprovalException.class)
+    public ProblemDetail handleSelfApproval(SelfApprovalException ex) {
+        return problem(HttpStatus.FORBIDDEN, "Kendi isteğini onaylayamazsın",
+                ex.getMessage(), "self-approval");
+    }
+
+    /**
+     * Kayıt onay beklemiyor: ya zaten karara bağlanmış ya da hiç onay gerektirmemiş.
+     *
+     * <p>409: istek geçerli, sistemin durumu uygun değil. Sessizce başarılı dönmek
+     * onaylayan kişiye bir şey yaptığını sandırırdı.
+     */
+    @ExceptionHandler(AdjustmentNotPendingException.class)
+    public ProblemDetail handleNotPending(AdjustmentNotPendingException ex) {
+        return problem(HttpStatus.CONFLICT, "Düzeltme onay beklemiyor",
+                ex.getMessage(), "adjustment-not-pending");
     }
 
     /** Alan modelinin kural ihlalleri (örn. miktar pozitif değil). */

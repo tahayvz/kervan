@@ -257,7 +257,7 @@ class StockAdjustmentIntegrationTest extends AbstractIntegrationTest {
         Instant sameMoment = Instant.parse("2026-03-10T12:00:00Z");
         transactions.executeWithoutResult(status -> {
             for (String id : List.of("id-a", "id-b", "id-c")) {
-                adjustmentRepository.saveIfNew(new StockAdjustment(
+                adjustmentRepository.saveIfNew(StockAdjustment.applied(
                         id + "-" + sku, sku, -1, AdjustmentReason.DAMAGED, null,
                         ADMIN_SUBJECT, sameMoment));
             }

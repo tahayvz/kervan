@@ -4,6 +4,7 @@ import com.kervan.inventory.domain.model.StockAdjustment;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Stok düzeltmelerinin defteri — yani denetim izi.
@@ -38,4 +39,19 @@ public interface StockAdjustmentRepository {
      *     {@code null}
      */
     List<StockAdjustment> findBySku(String sku, Instant beforeAt, String beforeId, int limit);
+
+    /** Tek bir düzeltmeyi kimliğiyle okur. Onay ve ret buradan başlar. */
+    Optional<StockAdjustment> find(String adjustmentId);
+
+    /**
+     * Kararı yazar (onay ya da ret).
+     *
+     * <p>Yalnızca <b>beklemede</b> olan bir kaydı günceller ve kaç satır etkilendiğini
+     * döndürür. Sıfır dönmesi, araya başka birinin girip aynı kaydı karara bağladığı
+     * anlamına gelir — "önce oku, sonra yaz" arasındaki boşluğu kapatan şey bu.
+     *
+     * @return güncellenen satır sayısı: karar bu çağrıyla verildiyse 1, başkası
+     *     önce davrandıysa 0
+     */
+    int decideIfPending(StockAdjustment decided);
 }

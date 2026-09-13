@@ -10,10 +10,14 @@ public record StockAdjustmentResponse(String adjustmentId,
                                       String reason,
                                       String note,
                                       String adjustedBy,
-                                      Instant adjustedAt) {
+                                      Instant adjustedAt,
+                                      String status,
+                                      String decidedBy,
+                                      Instant decidedAt) {
 
     public static StockAdjustmentResponse from(StockAdjustment a) {
         return new StockAdjustmentResponse(a.adjustmentId(), a.delta(), a.reason().name(),
-                a.note(), a.adjustedBy(), a.adjustedAt());
+                a.note(), a.adjustedBy(), a.adjustedAt(),
+                a.status().name(), a.decidedBy(), a.decidedAt());
     }
 }

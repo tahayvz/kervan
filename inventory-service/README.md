@@ -86,6 +86,36 @@ Dışa aktarılan ad, kodda yazılan ad **değildir** (`kervan.stock.received` �
 `kervan_stock_received_items_sum`). Grafana panosu o çıktıya bakar, o yüzden hem adlar
 hem panonun sorguları testle sabitlendi: `PrometheusEndpointTest`.
 
+## Büyük düzeltmelerde ikinci onay (ADR-0022)
+
+Stoğu düzeltme yetkisi, aynı zamanda **eksiği gizleme** yetkisidir: depodan mal alan
+biri sisteme "kayıp" yazıp kapatabilir. Denetim izi bunu *kaydeder* ama *durdurmaz*.
+
+```
+POST /api/v1/stock/adjustments/{adjustmentId}/approve
+POST /api/v1/stock/adjustments/{adjustmentId}/reject
+```
+
+Mutlak değeri **100 adetten** büyük düzeltmeler (ayarlanabilir) doğrudan uygulanmaz:
+kayıt beklemeye alınır, **stok değişmez**, uç `202 Accepted` döner. Küçük düzeltmeler
+eskisi gibi anında uygulanır ve `200` döner — yoksa "bir kutu ezilmiş, 3 adet düş"
+demek için ikinci kişi aramak gerekir ve kimse sistemi kullanmaz.
+
+**İsteyen kendi isteğini onaylayamaz — reddedemez de.** Bu kural ikinci onayın
+tamamıdır. Eşik yalnızca hangi düzeltmelerin onaya düşeceğini söyler; korumayı
+sağlayan şey isteyenin karar verememesidir.
+
+**Eşik adet üzerinden, para üzerinden değil.** Para daha doğru ölçü olurdu ama fiyat
+`catalog-service`'te; eşiği paraya bağlamak stok düzeltmesini katalog servisine
+senkron bağımlı yapardı. Bir kontrolün, korumaya çalıştığı şeyden kırılgan olması
+kabul edilemez.
+
+**Miktar onay anında yeniden doğrulanır.** İstek anında geçerliydi ama aradan zaman
+geçti; stok bu sürede düşmüş olabilir.
+
+Metrik yalnızca **gerçekten olan** hareketi sayar: bekleyen ve reddedilen düzeltmeler
+ölçüme girmez.
+
 **Denetim izi sayfalı.** `?cursor=` ve `?size=` (varsayılan 50, üst sınır 200);
 `nextCursor` boş gelene kadar aynı değeri geri gönder. `OFFSET` kullanılmıyor: iz
 ekleme yapılan bir defter, sayfa çevrilirken araya yeni kayıt girerse `OFFSET` sınırı

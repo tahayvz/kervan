@@ -307,6 +307,16 @@ that was never recorded — and it never touches the reserved quantity: that sto
 promised to a customer, and the right answer to losing it is cancelling their order, not
 quietly taking it.
 
+Above a threshold, a correction does not apply itself (ADR-0022). It is recorded as
+pending, the stock does not move, and the endpoint answers 202 rather than 200. A
+different admin has to approve it. The rule that matters is not the threshold but that
+**the person who asked cannot be the person who approves** — the threshold only decides
+which corrections go to review. Adjusting stock is also the power to hide a shortfall,
+and an audit trail records that without stopping it.
+
+Small corrections still apply immediately. A control nobody can work with is worse than
+no control, because it is believed to exist.
+
 Stock is kept as two numbers, available and reserved, rather than one. With a single
 number there would be no way to know how much to give back when the saga compensates;
 reserving moves quantity between the two rather than destroying it.

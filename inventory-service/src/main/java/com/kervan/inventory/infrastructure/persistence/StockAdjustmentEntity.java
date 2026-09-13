@@ -1,6 +1,7 @@
 package com.kervan.inventory.infrastructure.persistence;
 
 import com.kervan.inventory.domain.model.AdjustmentReason;
+import com.kervan.inventory.domain.model.AdjustmentStatus;
 import com.kervan.inventory.domain.model.StockAdjustment;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -43,12 +44,22 @@ class StockAdjustmentEntity {
     @Column(name = "adjusted_at", nullable = false)
     private Instant adjustedAt;
 
+    @Column(nullable = false)
+    private String status;
+
+    @Column(name = "decided_by")
+    private String decidedBy;
+
+    @Column(name = "decided_at")
+    private Instant decidedAt;
+
     protected StockAdjustmentEntity() {
         // JPA için
     }
 
     StockAdjustment toDomain() {
         return new StockAdjustment(adjustmentId, sku, delta,
-                AdjustmentReason.valueOf(reason), note, adjustedBy, adjustedAt);
+                AdjustmentReason.valueOf(reason), note, adjustedBy, adjustedAt,
+                AdjustmentStatus.valueOf(status), decidedBy, decidedAt);
     }
 }

@@ -10,6 +10,7 @@ import com.kervan.inventory.web.dto.StockResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
@@ -78,13 +80,44 @@ public class StockController {
      * JWT'nin {@code sub} alanıdır (bkz. JwtRoleConverter).
      */
     @PostMapping("/{sku}/adjustments")
-    @Operation(summary = "Sayım düzeltmesi: stoğu artırır ya da azaltır (gerekçe zorunlu)")
-    public StockResponse adjust(@PathVariable String sku,
-                                @Valid @RequestBody AdjustStockRequest req,
-                                Principal caller) {
-        StockItem updated = adjustments.adjust(
+    @Operation(summary = "Sayım düzeltmesi: küçükse uygulanır (200), büyükse onay bekler (202)")
+    public ResponseEntity<StockResponse> adjust(@PathVariable String sku,
+                                                @Valid @RequestBody AdjustStockRequest req,
+                                                Principal caller) {
+        StockItem stock = adjustments.adjust(
                 req.adjustmentId(), sku, req.delta(), req.reason(), req.note(), caller.getName());
-        return StockResponse.from(updated);
+
+        // 202, 200 DEĞİL.
+        //
+        // Eşiğin üstündeki bir düzeltmede stok DEĞİŞMEDİ; kayıt onay bekliyor
+        // (ADR-0022). 200 dönmek "yaptım" demek olurdu ve istemci stoğu değişmiş
+        // sanardı. 202 Accepted tam olarak "isteğini aldım, henüz uygulamadım" der.
+        //
+        // Gövde yine güncel stok: değişmediğini görmek, istemcinin beklediği bilgi.
+        return adjustments.isPending(req.adjustmentId())
+                ? ResponseEntity.accepted().body(StockResponse.from(stock))
+                : ResponseEntity.ok(StockResponse.from(stock));
+    }
+
+    /**
+     * Bekleyen bir düzeltmeyi onaylar; stok o anda değişir (ADR-0022).
+     *
+     * <p>Yol SKU altında değil: onaylayan kişi elinde bir düzeltme kimliği tutar, o
+     * kimliğin hangi SKU'ya ait olduğunu bilmek zorunda değildir. SKU'yu yola koymak,
+     * onaylayanın onu yanlış yazması hâlinde sessizce 404 üretirdi.
+     */
+    @PostMapping("/adjustments/{adjustmentId}/approve")
+    @Operation(summary = "Bekleyen düzeltmeyi onayla (isteyen kendi isteğini onaylayamaz)")
+    public StockResponse approve(@PathVariable String adjustmentId, Principal caller) {
+        return StockResponse.from(adjustments.approve(adjustmentId, caller.getName()));
+    }
+
+    /** Bekleyen bir düzeltmeyi reddeder. Stok hiç değişmez. */
+    @PostMapping("/adjustments/{adjustmentId}/reject")
+    @Operation(summary = "Bekleyen düzeltmeyi reddet")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reject(@PathVariable String adjustmentId, Principal caller) {
+        adjustments.reject(adjustmentId, caller.getName());
     }
 
     /**

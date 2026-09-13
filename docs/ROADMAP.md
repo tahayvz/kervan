@@ -449,8 +449,13 @@ yapılıyor; gerekçesi ve ödünü ADR'de. Mutasyonla doğrulandı.
 - **Debezium *düzeneği* otomatik sınanmıyor.** Yapılandırma değerleri bağlandı
   (ADR-0020), ama mantıksal çözümleme, publication ve replication slot yalnızca
   Faz 10'da elle görüldü.
-- **Büyük stok düzeltmelerinde ikinci onay yok** (ADR-0021). `ADMIN` olan herkes
-  sınırsız düzeltebiliyor.
+> Büyük düzeltmelerde ikinci onay **kapandı** (ADR-0022): eşiğin üstü beklemeye
+> alınıyor, isteyen kendi isteğini onaylayamıyor.
+
+- **Bekleyen düzeltmeler için liste ucu yok** (ADR-0022). Onaylayan kişi düzeltme
+  kimliğini başka bir yoldan öğrenmek zorunda; kısmi indeks o sorgu için hazır ama
+  uç yazılmadı.
+- **Bekleyen kayıtlara zaman aşımı yok.** Kimse karar vermezse sonsuza kadar bekler.
 
 ---
 

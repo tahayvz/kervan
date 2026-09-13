@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 class StockAdjustmentRepositoryAdapter implements StockAdjustmentRepository {
@@ -22,7 +23,19 @@ class StockAdjustmentRepositoryAdapter implements StockAdjustmentRepository {
         return repository.insertIfNew(
                 adjustment.adjustmentId(), adjustment.sku(), adjustment.delta(),
                 adjustment.reason().name(), adjustment.note(),
-                adjustment.adjustedBy(), adjustment.adjustedAt()) == 1;
+                adjustment.adjustedBy(), adjustment.adjustedAt(),
+                adjustment.status().name()) == 1;
+    }
+
+    @Override
+    public Optional<StockAdjustment> find(String adjustmentId) {
+        return repository.findById(adjustmentId).map(StockAdjustmentEntity::toDomain);
+    }
+
+    @Override
+    public int decideIfPending(StockAdjustment decided) {
+        return repository.decideIfPending(decided.adjustmentId(), decided.status().name(),
+                decided.decidedBy(), decided.decidedAt());
     }
 
     /**

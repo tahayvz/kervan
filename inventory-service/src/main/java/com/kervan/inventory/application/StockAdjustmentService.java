@@ -1,8 +1,12 @@
 package com.kervan.inventory.application;
 
+import com.kervan.inventory.domain.model.AdjustmentNotFoundException;
+import com.kervan.inventory.domain.model.AdjustmentNotPendingException;
 import com.kervan.inventory.domain.model.AdjustmentReason;
+import com.kervan.inventory.domain.model.AdjustmentStatus;
 import com.kervan.inventory.domain.model.StockAdjustment;
 import com.kervan.inventory.domain.model.StockItem;
+import com.kervan.inventory.domain.model.SelfApprovalException;
 import com.kervan.inventory.domain.model.StockNotFoundException;
 import com.kervan.inventory.domain.model.StockAdjustment;
 import com.kervan.inventory.domain.port.AdjustmentPage;
@@ -10,6 +14,7 @@ import com.kervan.inventory.domain.port.StockAdjustmentRepository;
 import com.kervan.inventory.domain.port.StockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,12 +68,27 @@ public class StockAdjustmentService {
     private final StockAdjustmentRepository adjustments;
     private final Clock clock;
 
+    /**
+     * Bu miktarın (mutlak değer) üstündeki düzeltmeler ikinci onay bekler.
+     *
+     * <p><b>Adet üzerinden, para üzerinden değil.</b> Para daha doğru bir ölçü olurdu
+     * — 5000 vida ile 5 televizyon aynı şey değil — ama fiyat {@code catalog-service}'te
+     * duruyor. Eşiği paraya bağlamak, stok düzeltmesini katalog servisine senkron
+     * olarak bağımlı yapardı: katalog ayaktayken düzeltme yapılabilir, değilken
+     * yapılamaz hâle gelirdi. Bir kontrolün, korumaya çalıştığı şeyden daha kırılgan
+     * olması kabul edilemez (ADR-0022).
+     */
+    private final int approvalThreshold;
+
     public StockAdjustmentService(StockRepository stockRepository,
                                   StockAdjustmentRepository adjustments,
-                                  Clock clock) {
+                                  Clock clock,
+                                  @Value("${kervan.inventory.adjustment.approval-threshold:100}")
+                                  int approvalThreshold) {
         this.stockRepository = stockRepository;
         this.adjustments = adjustments;
         this.clock = clock;
+        this.approvalThreshold = approvalThreshold;
     }
 
     /**
@@ -110,13 +130,30 @@ public class StockAdjustmentService {
         // duzeltmeleri de saymis olurdu.
         //
         // Simdi sira dogru: gecersizse hic yazilmaz.
+        // Doğrulama, deftere yazmadan önce. Eşiğin üstünde bile olsa geçersiz bir
+        // düzeltme onaya DÜŞMEMELİ: onaylayan kişiye uygulanamayacak bir şeyi
+        // incelettirmek, onun zamanını harcamaktan başka bir şey yapmaz.
         StockItem updated = current.adjust(delta);
 
         Instant now = clock.instant();
-        boolean isNew = adjustments.saveIfNew(new StockAdjustment(
-                adjustmentId, sku, delta, reason, note, adjustedBy, now));
-        if (!isNew) {
-            log.debug("Düzeltme zaten uygulanmış, tekrar edilmedi: adjustmentId={}", adjustmentId);
+        boolean needsApproval = Math.abs((long) delta) > approvalThreshold;
+
+        StockAdjustment record = needsApproval
+                ? StockAdjustment.pending(adjustmentId, sku, delta, reason, note, adjustedBy, now)
+                : StockAdjustment.applied(adjustmentId, sku, delta, reason, note, adjustedBy, now);
+
+        if (!adjustments.saveIfNew(record)) {
+            // Stok zaten elimizde ve tekrar gelen istekte DEĞİŞMEMİŞ olmalı:
+            // uygulanmış bir düzeltme ikinci kez uygulanmaz, bekleyen bir düzeltme
+            // zaten stoğa dokunmadı. Yeniden okumaya gerek yok.
+            log.debug("Düzeltme zaten işlenmiş, tekrar edilmedi: adjustmentId={}", adjustmentId);
+            return current;
+        }
+
+        if (needsApproval) {
+            // STOK DEĞİŞMEDİ. Kayıt beklemede duruyor.
+            log.info("Düzeltme onay bekliyor: adjustmentId={} sku={} delta={} isteyen={}",
+                    adjustmentId, sku, delta, adjustedBy);
             return current;
         }
 
@@ -127,6 +164,66 @@ public class StockAdjustmentService {
                 sku, delta, reason, adjustedBy, updated.available());
         return updated;
     }
+
+    /** Düzeltme onay bekliyor mu? Uç, 200 ile 202 arasında buna bakarak seçer. */
+    @Transactional(readOnly = true)
+    public boolean isPending(String adjustmentId) {
+        return adjustments.find(adjustmentId)
+                .map(a -> a.status() == AdjustmentStatus.PENDING)
+                .orElse(false);
+    }
+
+    /**
+     * Bekleyen bir düzeltmeyi onaylar ve stoğu <b>o anda</b> değiştirir.
+     *
+     * @throws SelfApprovalException isteyen kendi isteğini onaylamaya çalışırsa
+     * @throws AdjustmentNotPendingException kayıt onay beklemiyorsa
+     * @throws StockNotFoundException stok kaydı silinmişse
+     */
+    @Transactional
+    public StockItem approve(String adjustmentId, String approver) {
+        StockAdjustment pending = pendingOrFail(adjustmentId);
+        // Kural alan modelinde: beklemede mi, ve karar veren isteyenle aynı mı.
+        StockAdjustment approved = pending.approvedBy(approver, clock.instant());
+
+        StockItem current = stockRepository.lockAll(List.of(pending.sku())).stream().findFirst()
+                .orElseThrow(() -> new StockNotFoundException(pending.sku()));
+        // Miktar ONAY ANINDA yeniden doğrulanıyor. İstek anında geçerliydi ama aradan
+        // zaman geçti; stok bu sürede düşmüş olabilir ve eksiye götüren bir düzeltme
+        // o zaman da reddedilmeli.
+        StockItem updated = current.adjust(pending.delta());
+
+        if (adjustments.decideIfPending(approved) != 1) {
+            // Araya başka bir onaylayan girdi. Koşul yazmanın kendisinde olduğu için
+            // burada kaybeden taraf hiçbir şey yazmadı; stok da değişmemeli.
+            throw new AdjustmentNotPendingException(adjustmentId, AdjustmentStatus.APPROVED);
+        }
+        stockRepository.saveAll(List.of(updated));
+
+        log.info("Düzeltme onaylandı: adjustmentId={} sku={} delta={} isteyen={} onaylayan={} yeniStok={}",
+                adjustmentId, pending.sku(), pending.delta(), pending.adjustedBy(), approver,
+                updated.available());
+        return updated;
+    }
+
+    /** Bekleyen bir düzeltmeyi reddeder. Stok hiç değişmez. */
+    @Transactional
+    public void reject(String adjustmentId, String rejecter) {
+        StockAdjustment pending = pendingOrFail(adjustmentId);
+        StockAdjustment rejected = pending.rejectedBy(rejecter, clock.instant());
+
+        if (adjustments.decideIfPending(rejected) != 1) {
+            throw new AdjustmentNotPendingException(adjustmentId, AdjustmentStatus.REJECTED);
+        }
+        log.info("Düzeltme reddedildi: adjustmentId={} sku={} isteyen={} reddeden={}",
+                adjustmentId, pending.sku(), pending.adjustedBy(), rejecter);
+    }
+
+    private StockAdjustment pendingOrFail(String adjustmentId) {
+        return adjustments.find(adjustmentId)
+                .orElseThrow(() -> new AdjustmentNotFoundException(adjustmentId));
+    }
+
 
     /**
      * Bir SKU'nun düzeltme geçmişi, en yeniden eskiye ve sayfalı.
