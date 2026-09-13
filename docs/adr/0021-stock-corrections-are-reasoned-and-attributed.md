@@ -86,7 +86,20 @@ birincil anahtar, karar `INSERT ... ON CONFLICT DO NOTHING` ile veritabanında.
 - **Olumsuz / ödün:** Düzeltme **olay yayınlamıyor**. Outbox düzeneği serviste var ama
   tüketicisi yok; ADR-0019'daki gerekçenin aynısı. Gerçek bir sistemde muhasebe bunu
   dinlerdi.
-- **Takip / risk:** Denetim izi tek seferde en fazla 50 kayıt dönüyor ve sayfalama yok.
-  Yüzlerce düzeltmesi olan bir SKU'da eski kayıtlar bu uçtan görünmez.
+- **Takip / risk — KAPANDI (2026-09-13):** Denetim izi ilk hâlinde yalnızca son 50
+  kaydı dönüyordu ve eskisine erişmenin yolu yoktu; yani iz belli bir noktadan sonra
+  okunamıyordu. Artık **anahtar tabanlı (keyset) sayfalama** var: `?cursor=` ve
+  `?size=` (varsayılan 50, üst sınır 200).
+
+  `OFFSET` kullanılmadı ve bu bilinçli: denetim izi ekleme yapılan bir defterdir,
+  sayfa çevrilirken araya yeni kayıt girerse `OFFSET` sınırı kaydırır ve okuyan kişi
+  bir kaydı iki kez görür ya da **hiç görmez**. İkincisi bir denetim izinde kabul
+  edilemez.
+
+  Sıralama `(adjusted_at DESC, adjustment_id DESC)`. İkinci alan süs değil: aynı anda
+  yazılmış kayıtlarda sınır onların ortasına düşer ve biri görünmez olurdu.
+  Mutasyonla doğrulandı — `WHERE`'deki kimlik sınırı kaldırıldığında üç kayıttan
+  ikisi görüldü. (`ORDER BY`'daki kimlik de gerekli ama testle korunmuyor; gerekçesi
+  test dosyasında yazılı.)
 - **Takip / risk:** Yetki tek kademeli — `ADMIN` olan herkes sınırsız düzeltebilir.
   Gerçek bir kurulumda büyük düzeltmeler ikinci bir onay isterdi.

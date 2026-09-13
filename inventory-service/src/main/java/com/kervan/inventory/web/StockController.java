@@ -4,8 +4,8 @@ import com.kervan.inventory.application.StockAdjustmentService;
 import com.kervan.inventory.application.StockReceiptService;
 import com.kervan.inventory.domain.model.StockItem;
 import com.kervan.inventory.web.dto.AdjustStockRequest;
+import com.kervan.inventory.web.dto.AdjustmentPageResponse;
 import com.kervan.inventory.web.dto.ReceiveStockRequest;
-import com.kervan.inventory.web.dto.StockAdjustmentResponse;
 import com.kervan.inventory.web.dto.StockResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,10 +16,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
-import java.util.List;
 
 /**
  * Stok REST API'si. İnce bir katman: HTTP ↔ application çevirisi yapar, iş kuralı içermez.
@@ -90,12 +90,17 @@ public class StockController {
     /**
      * Düzeltme geçmişi — denetim izi.
      *
-     * <p>Okunamayan bir denetim izi, denetim izi değildir. En yeniden eskiye, en fazla
-     * {@link StockAdjustmentService#HISTORY_LIMIT} kayıt.
+     * <p>Okunamayan bir denetim izi, denetim izi değildir. Sayfalama anahtar tabanlı:
+     * {@code nextCursor} boş gelene kadar aynı değeri {@code ?cursor=} ile geri gönder.
+     *
+     * <p>İlk hâlinde yalnızca son 50 kayıt dönüyordu ve eskisine erişmenin yolu yoktu —
+     * yani iz belli bir noktadan sonra okunamıyordu.
      */
     @GetMapping("/{sku}/adjustments")
-    @Operation(summary = "Bir SKU'nun düzeltme geçmişi (en yeniden eskiye)")
-    public List<StockAdjustmentResponse> history(@PathVariable String sku) {
-        return adjustments.history(sku).stream().map(StockAdjustmentResponse::from).toList();
+    @Operation(summary = "Bir SKU'nun düzeltme geçmişi (en yeniden eskiye, sayfalı)")
+    public AdjustmentPageResponse history(@PathVariable String sku,
+                                          @RequestParam(required = false) String cursor,
+                                          @RequestParam(required = false) Integer size) {
+        return AdjustmentPageResponse.from(adjustments.history(sku, cursor, size));
     }
 }

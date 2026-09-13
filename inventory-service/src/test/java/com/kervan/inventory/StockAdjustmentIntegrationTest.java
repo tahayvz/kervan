@@ -2,9 +2,11 @@ package com.kervan.inventory;
 
 import com.kervan.inventory.domain.model.AdjustmentReason;
 import com.kervan.inventory.security.TestJwtSupport;
+import com.kervan.inventory.domain.model.StockAdjustment;
+import com.kervan.inventory.domain.port.StockAdjustmentRepository;
 import com.kervan.inventory.web.dto.AdjustStockRequest;
+import com.kervan.inventory.web.dto.AdjustmentPageResponse;
 import com.kervan.inventory.web.dto.ReceiveStockRequest;
-import com.kervan.inventory.web.dto.StockAdjustmentResponse;
 import com.kervan.inventory.web.dto.StockResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,13 +14,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,6 +42,20 @@ class StockAdjustmentIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private TestRestTemplate rest;
+
+    @Autowired
+    private StockAdjustmentRepository adjustmentRepository;
+
+    /**
+     * Depoya doğrudan yazarken transaction gerekiyor: {@code @Modifying} sorgular
+     * transaction dışında çalışmaz.
+     *
+     * <p>Test metoduna {@code @Transactional} koymak YANLIŞ olurdu — o durumda yazılan
+     * satırlar test sonunda geri alınır ve ayrı transaction'larda çalışan HTTP
+     * istekleri onları hiç göremezdi.
+     */
+    @Autowired
+    private org.springframework.transaction.support.TransactionTemplate transactions;
 
     private static String admin() {
         return TestJwtSupport.tokenFor(ADMIN_SUBJECT, "ADMIN");
@@ -164,6 +180,14 @@ class StockAdjustmentIntegrationTest extends AbstractIntegrationTest {
 
     // --- denetim izi ---
 
+    private AdjustmentPageResponse history(String sku, String query) {
+        ResponseEntity<AdjustmentPageResponse> response = rest.exchange(
+                "/api/v1/stock/" + sku + "/adjustments" + query, HttpMethod.GET,
+                withToken(admin(), null), AdjustmentPageResponse.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return response.getBody();
+    }
+
     @Test
     @DisplayName("denetim izi okunabilir ve düzeltmeyi YAPANI token'dan alır")
     void auditTrailRecordsTheCaller() {
@@ -171,21 +195,93 @@ class StockAdjustmentIntegrationTest extends AbstractIntegrationTest {
         adjust(sku, new AdjustStockRequest("a1-" + sku, -3, AdjustmentReason.SHRINKAGE, "sayım"), admin());
         adjust(sku, new AdjustStockRequest("a2-" + sku, 2, AdjustmentReason.COUNT_CORRECTION, null), admin());
 
-        ResponseEntity<List<StockAdjustmentResponse>> history = rest.exchange(
-                "/api/v1/stock/" + sku + "/adjustments", HttpMethod.GET,
-                withToken(admin(), null), new ParameterizedTypeReference<>() {
-                });
+        AdjustmentPageResponse page = history(sku, "");
 
-        assertThat(history.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(history.getBody()).hasSize(2);
+        assertThat(page.items()).hasSize(2);
         // En yeniden eskiye.
-        assertThat(history.getBody().get(0).delta()).isEqualTo(2);
-        assertThat(history.getBody().get(1).delta()).isEqualTo(-3);
-        assertThat(history.getBody().get(1).reason()).isEqualTo("SHRINKAGE");
-        assertThat(history.getBody().get(1).note()).isEqualTo("sayım");
+        assertThat(page.items().get(0).delta()).isEqualTo(2);
+        assertThat(page.items().get(1).delta()).isEqualTo(-3);
+        assertThat(page.items().get(1).reason()).isEqualTo("SHRINKAGE");
+        assertThat(page.items().get(1).note()).isEqualTo("sayım");
+        // Devamı yok: son sayfada işaret verilmemeli.
+        assertThat(page.nextCursor()).isNull();
         // ASIL İDDİA: kimlik istekten değil TOKEN'dan geldi. Gövdede "kim" alanı
         // olsaydı, isteyen başkasının adına düzeltme yazabilirdi.
-        assertThat(history.getBody()).allSatisfy(
+        assertThat(page.items()).allSatisfy(
                 a -> assertThat(a.adjustedBy()).isEqualTo(ADMIN_SUBJECT));
+    }
+
+    @Test
+    @DisplayName("sayfa çevrilerek TÜM kayıtlar okunur, hiçbiri tekrarlanmaz")
+    void pagesThroughEveryRecord() {
+        String sku = stockedSku(100);
+        for (int i = 0; i < 5; i++) {
+            adjust(sku, new AdjustStockRequest("a" + i + "-" + sku, -1,
+                    AdjustmentReason.DAMAGED, null), admin());
+        }
+
+        List<String> seen = new java.util.ArrayList<>();
+        String cursor = null;
+        int guard = 0;
+        do {
+            AdjustmentPageResponse page = history(sku,
+                    cursor == null ? "?size=2" : "?size=2&cursor=" + cursor);
+            page.items().forEach(a -> seen.add(a.adjustmentId()));
+            cursor = page.nextCursor();
+        } while (cursor != null && ++guard < 10);
+
+        assertThat(seen).hasSize(5).doesNotHaveDuplicates();
+    }
+
+    @Test
+    @DisplayName("AYNI ANDA yazılmış kayıtlarda sayfalama hiçbirini ATLAMAZ")
+    void samePreciseInstantIsNotSkipped() {
+        // Bu testin varlık sebebi: sıralama yalnızca zamana bakıp kimliği hesaba
+        // katmasaydı, aynı anı paylaşan iki kaydın arasına düşen sayfa sınırı
+        // birini GÖRÜNMEZ yapardı. Bir denetim izinde "bazen bir kayıt atlanıyor"
+        // kabul edilemez.
+        //
+        // API üzerinden aynı anı zorlamak mümkün değil (saat her çağrıda ilerler),
+        // o yüzden riskli katman -- depo ve SQL -- doğrudan sınanıyor.
+        //
+        // NE KADARINI KANITLADIĞI: bu test WHERE'deki kimlik sınırını koruyor.
+        // Mutasyonla doğrulandı: sınır kaldırıldığında 3 kayıttan 2'si görüldü.
+        //
+        // NE KADARINI KANITLAMADIĞI: ORDER BY'daki kimlik. O da gerekli -- sıralama
+        // yalnızca zamana bakarsa aynı anı paylaşan satırların sırası veritabanının
+        // keyfine kalır ve sayfa sınırı yine yanlış yere düşebilir. Ama denendi:
+        // ORDER BY'dan kimlik çıkarıldığında bu test YEŞİL kaldı, çünkü PostgreSQL
+        // o küçük tabloda tesadüfen uygun sırada döndürdü. Yani o satır bilerek
+        // duruyor ama testle korunmuyor; ona dokunan dikkatli olmalı.
+        String sku = "SKU-" + UUID.randomUUID();
+        Instant sameMoment = Instant.parse("2026-03-10T12:00:00Z");
+        transactions.executeWithoutResult(status -> {
+            for (String id : List.of("id-a", "id-b", "id-c")) {
+                adjustmentRepository.saveIfNew(new StockAdjustment(
+                        id + "-" + sku, sku, -1, AdjustmentReason.DAMAGED, null,
+                        ADMIN_SUBJECT, sameMoment));
+            }
+        });
+
+        AdjustmentPageResponse first = history(sku, "?size=2");
+        assertThat(first.items()).hasSize(2);
+        assertThat(first.nextCursor()).isNotNull();
+
+        AdjustmentPageResponse second = history(sku, "?size=2&cursor=" + first.nextCursor());
+
+        List<String> all = new java.util.ArrayList<>();
+        first.items().forEach(a -> all.add(a.adjustmentId()));
+        second.items().forEach(a -> all.add(a.adjustmentId()));
+        assertThat(all).hasSize(3).doesNotHaveDuplicates();
+    }
+
+    @Test
+    @DisplayName("bozuk işaret 400 döner, sessizce ilk sayfaya dönmez")
+    void brokenCursorIsRejected() {
+        ResponseEntity<String> response = rest.exchange(
+                "/api/v1/stock/" + stockedSku(10) + "/adjustments?cursor=bozuk!!",
+                HttpMethod.GET, withToken(admin(), null), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 }

@@ -20,6 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,6 +46,10 @@ class StockAdjustmentServiceTest {
         adjustments = mock(StockAdjustmentRepository.class);
         service = new StockAdjustmentService(stockRepository, adjustments,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    private static StockAdjustment adjustment(String id, Instant at) {
+        return new StockAdjustment(id, SKU, -1, AdjustmentReason.DAMAGED, null, WHO, at);
     }
 
     private void stockIs(StockItem item) {
@@ -128,6 +135,60 @@ class StockAdjustmentServiceTest {
         assertThat(saved.reason()).isEqualTo(AdjustmentReason.SHRINKAGE);
         assertThat(saved.delta()).isEqualTo(-3);
         assertThat(saved.note()).isEqualTo("depo sayımı");
+    }
+
+    @Test
+    @DisplayName("sayfa büyüklüğü üst sınırla kırpılır")
+    void clampsPageSize() {
+        when(adjustments.findBySku(eq(SKU), isNull(), isNull(), anyInt())).thenReturn(List.of());
+
+        service.history(SKU, null, 100_000);
+
+        // Üst sınır olmasaydı tek bir istek yüz binlerce kaydı belleğe alırdı; bir
+        // denetim ucunu böyle bırakmak onu hizmet dışı bırakma aracına çevirir.
+        // +1 isteniyor çünkü "daha var mı" sorusu bir fazla kayıtla cevaplanıyor.
+        verify(adjustments).findBySku(SKU, null, null, StockAdjustmentService.MAX_PAGE_SIZE + 1);
+    }
+
+    @Test
+    @DisplayName("sayfa doluysa nextCursor verilir, son sayfada VERİLMEZ")
+    void cursorOnlyWhenMoreRemain() {
+        // Tam sayfa dolduran kadar kayıt: daha fazlası yok.
+        when(adjustments.findBySku(eq(SKU), isNull(), isNull(), anyInt()))
+                .thenReturn(List.of(adjustment("a1", NOW)));
+
+        assertThat(service.history(SKU, null, 1).nextCursor()).isNull();
+
+        // Bir fazla kayıt: demek ki devamı var.
+        when(adjustments.findBySku(eq(SKU), isNull(), isNull(), anyInt()))
+                .thenReturn(List.of(adjustment("a1", NOW), adjustment("a2", NOW.minusSeconds(1))));
+
+        assertThat(service.history(SKU, null, 1).nextCursor()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("işaret, sayfanın SON kaydının yerini taşır")
+    void cursorPointsAtTheLastItem() {
+        when(adjustments.findBySku(eq(SKU), isNull(), isNull(), anyInt()))
+                .thenReturn(List.of(adjustment("a1", NOW),
+                        adjustment("a2", NOW.minusSeconds(5)),
+                        adjustment("fazlalik", NOW.minusSeconds(9))));
+
+        String cursor = service.history(SKU, null, 2).nextCursor();
+        service.history(SKU, cursor, 2);
+
+        // İkinci sayfa "a2"den ÖNCEKİLER diye sorulmalı. Aynı anı paylaşan kayıtlar
+        // için kimlik de sınıra giriyor; yoksa biri atlanabilirdi.
+        verify(adjustments).findBySku(SKU, NOW.minusSeconds(5), "a2", 3);
+    }
+
+    @Test
+    @DisplayName("bozuk işaret sessizce ilk sayfaya DÖNMEZ, hata verir")
+    void rejectsBrokenCursor() {
+        // Sessizce başa dönmek, okuyan kişiye sayfa çevirdiğini sandırırken aynı
+        // kayıtları ikinci kez okutur.
+        assertThatThrownBy(() -> service.history(SKU, "bu-bir-imlec-degil!!", null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

@@ -65,6 +65,11 @@ gerçekten kaybolduysa doğru cevap stoğu düzeltmek değil, o siparişi iptal 
 **Eksiye düşen düzeltme reddedilir, sıfıra yuvarlanmaz.** "5 tane kırıldı" denildiğinde
 elde 3 varsa gerçek dünyada bir şey daha yanlış demektir; yuvarlamak onu gizler.
 
+**Denetim izi sayfalı.** `?cursor=` ve `?size=` (varsayılan 50, üst sınır 200);
+`nextCursor` boş gelene kadar aynı değeri geri gönder. `OFFSET` kullanılmıyor: iz
+ekleme yapılan bir defter, sayfa çevrilirken araya yeni kayıt girerse `OFFSET` sınırı
+kaydırır ve bir kayıt iki kez görünür ya da **hiç görünmez**.
+
 ## Akış
 
 ```

@@ -33,5 +33,28 @@ interface SpringDataStockAdjustmentRepository extends JpaRepository<StockAdjustm
                     @Param("adjustedBy") String adjustedBy,
                     @Param("adjustedAt") Instant adjustedAt);
 
-    List<StockAdjustmentEntity> findBySkuOrderByAdjustedAtDesc(String sku, Limit limit);
+    /** Denetim izinin ilk sayfası: en yeni kayıtlar. */
+    List<StockAdjustmentEntity> findBySkuOrderByAdjustedAtDescAdjustmentIdDesc(String sku, Limit limit);
+
+    /**
+     * Sonraki sayfa: verilen noktadan ÖNCEKİLER.
+     *
+     * <p>Karşılaştırma iki alan üzerinden:
+     * {@code adjustedAt < :beforeAt} <b>ya da</b>
+     * {@code (adjustedAt = :beforeAt ve adjustmentId < :beforeId)}.
+     *
+     * <p>İkinci koşul bir süs değil. Aynı milisaniyede yazılmış iki kayıt varsa,
+     * sayfa sınırı tam onların ortasına düşebilir ve biri <b>hiç görünmez</b>. Bir
+     * denetim izinde "bazen bir kayıt atlanıyor" kabul edilemez; izin değeri
+     * tamlığındadır.
+     */
+    @Query("SELECT a FROM StockAdjustmentEntity a "
+            + "WHERE a.sku = :sku "
+            + "AND (a.adjustedAt < :beforeAt "
+            + "     OR (a.adjustedAt = :beforeAt AND a.adjustmentId < :beforeId)) "
+            + "ORDER BY a.adjustedAt DESC, a.adjustmentId DESC")
+    List<StockAdjustmentEntity> findPageBefore(@Param("sku") String sku,
+                                               @Param("beforeAt") Instant beforeAt,
+                                               @Param("beforeId") String beforeId,
+                                               Limit limit);
 }

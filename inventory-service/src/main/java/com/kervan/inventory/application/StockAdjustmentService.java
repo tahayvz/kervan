@@ -4,6 +4,8 @@ import com.kervan.inventory.domain.model.AdjustmentReason;
 import com.kervan.inventory.domain.model.StockAdjustment;
 import com.kervan.inventory.domain.model.StockItem;
 import com.kervan.inventory.domain.model.StockNotFoundException;
+import com.kervan.inventory.domain.model.StockAdjustment;
+import com.kervan.inventory.domain.port.AdjustmentPage;
 import com.kervan.inventory.domain.port.StockAdjustmentRepository;
 import com.kervan.inventory.domain.port.StockRepository;
 import org.slf4j.Logger;
@@ -45,8 +47,17 @@ public class StockAdjustmentService {
 
     private static final Logger log = LoggerFactory.getLogger(StockAdjustmentService.class);
 
-    /** Denetim izinde tek seferde dönen en fazla kayıt. */
-    public static final int HISTORY_LIMIT = 50;
+    /** İstenmediğinde sayfa büyüklüğü. */
+    public static final int DEFAULT_PAGE_SIZE = 50;
+
+    /**
+     * İstense de aşılmayan sayfa büyüklüğü.
+     *
+     * <p>Üst sınır olmasaydı tek bir istek yüz binlerce kaydı belleğe alırdı; bir
+     * denetim ucunu böyle bırakmak, onu aynı zamanda bir hizmet dışı bırakma aracı
+     * yapar.
+     */
+    public static final int MAX_PAGE_SIZE = 200;
 
     private final StockRepository stockRepository;
     private final StockAdjustmentRepository adjustments;
@@ -107,10 +118,46 @@ public class StockAdjustmentService {
         return updated;
     }
 
-    /** Bir SKU'nun düzeltme geçmişi, en yeniden eskiye. */
+    /**
+     * Bir SKU'nun düzeltme geçmişi, en yeniden eskiye ve sayfalı.
+     *
+     * <p>Sayfalama anahtar tabanlı (keyset), {@code OFFSET} değil. Denetim izi ekleme
+     * yapılan bir defterdir: {@code OFFSET} ile sayfa çevirirken araya yeni bir kayıt
+     * girerse sınır kayar ve okuyan kişi bir kaydı iki kez görür ya da hiç görmez.
+     * İkincisi bir denetim izinde kabul edilemez.
+     *
+     * @param cursor önceki sayfanın {@code nextCursor}'ı; ilk sayfa için {@code null}
+     * @param size istenen sayfa büyüklüğü; {@code null} ise varsayılan, üst sınır
+     *     {@link #MAX_PAGE_SIZE}
+     */
     @Transactional(readOnly = true)
-    public List<StockAdjustment> history(String sku) {
-        return adjustments.findBySku(sku, HISTORY_LIMIT);
+    public AdjustmentPage history(String sku, String cursor, Integer size) {
+        int limit = pageSize(size);
+        AuditCursor.Decoded from = (cursor == null || cursor.isBlank())
+                ? null : AuditCursor.decode(cursor);
+
+        // Bir fazla istenip son kayıt atılıyor: "daha var mı" sorusunun cevabı ancak
+        // böyle kesin bilinir. Sayfa tam dolduğu için "muhtemelen vardır" demek,
+        // son sayfada boş bir sayfa daha çevirtir.
+        List<StockAdjustment> rows = adjustments.findBySku(sku,
+                from == null ? null : from.adjustedAt(),
+                from == null ? null : from.adjustmentId(),
+                limit + 1);
+
+        boolean hasMore = rows.size() > limit;
+        List<StockAdjustment> items = hasMore ? rows.subList(0, limit) : rows;
+        String next = hasMore ? AuditCursor.of(items.get(items.size() - 1)) : null;
+        return new AdjustmentPage(List.copyOf(items), next);
+    }
+
+    private int pageSize(Integer requested) {
+        if (requested == null) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        if (requested < 1) {
+            throw new IllegalArgumentException("Sayfa büyüklüğü pozitif olmalı: " + requested);
+        }
+        return Math.min(requested, MAX_PAGE_SIZE);
     }
 
     private void requireNoteWhenOther(AdjustmentReason reason, String note) {
