@@ -48,7 +48,17 @@ final class AuditCursor {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Geçersiz sayfa işareti", e);
         }
-        int separator = raw.lastIndexOf(SEPARATOR);
+        // ILK ayiricidan bolunuyor, SONUNCUDAN degil.
+        //
+        // Bicim: <instant>|<adjustmentId>. Tarih hicbir zaman "|" icermez, ama
+        // adjustmentId ISTEMCININ verdigi serbest bir metindir ve icerebilir --
+        // "INV|2026|001" gibi bir irsaliye numarasi son derece makul.
+        //
+        // lastIndexOf ile bolununce ayirici kimligin ICINE duser ve tarih kismi
+        // "2026-03-10T12:00:00Z|INV|2026" olur; Instant.parse patlar ve SUNUCUNUN
+        // KENDI URETTIGI imlec 400 doner. Yani o SKU'nun denetim izi ilk sayfadan
+        // sonra hic okunamaz.
+        int separator = raw.indexOf(SEPARATOR);
         if (separator < 0) {
             throw new IllegalArgumentException("Geçersiz sayfa işareti");
         }

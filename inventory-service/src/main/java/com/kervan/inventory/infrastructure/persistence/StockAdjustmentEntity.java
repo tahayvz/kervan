@@ -47,14 +47,6 @@ class StockAdjustmentEntity {
         // JPA için
     }
 
-    String getAdjustmentId() {
-        return adjustmentId;
-    }
-
-    Instant getAdjustedAt() {
-        return adjustedAt;
-    }
-
     StockAdjustment toDomain() {
         return new StockAdjustment(adjustmentId, sku, delta,
                 AdjustmentReason.valueOf(reason), note, adjustedBy, adjustedAt);

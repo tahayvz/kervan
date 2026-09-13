@@ -80,6 +80,27 @@ say ""
 say "Guncelleme sirasinda kesinti var mi? (${DEPLOYMENT})"
 say "  hedef: ${URL}"
 
+# --- 0) Pod'lari BULABILIYOR MUYUZ? ---
+#
+# Bu kontrol, olcumun kendisinden once geliyor ve sebebi su: asagidaki bekleme
+# dongusu "eski pod adlarinin hicbiri kalmadi" kosuluna dayaniyor. Liste BOS
+# gelirse o kosul ilk turda saglanir, dongu aninda kirilir ve geriye yalnizca
+# on yuk + kuyruk kalir (~40 istek) -- bu da TOTAL esigini gecer.
+#
+# Yani betik hic guncelleme gormeden "kesintisiz" derdi. Ayni betik bu hatayi bir
+# kez zaten yapti (bitis `kubectl rollout status` ile tanimlanmisti ve o, eski pod
+# hala ayaktayken donuyordu). Sessizce hicbir sey dogrulamayan bir dogrulama,
+# hic dogrulama yapmamaktan kotudur: yesil isaret yanlis guven verir.
+OLD_PODS=$(pods_of "$DEPLOYMENT")
+if [ -z "$(printf '%s' "$OLD_PODS" | tr -d '[:space:]')" ]; then
+  say ""
+  say "  [HATA] '${DEPLOYMENT}' icin pod bulunamadi."
+  say "         Etiket: app.kubernetes.io/name=${DEPLOYMENT#kervan-}"
+  say "         Pod listesi olmadan 'guncelleme bitti' kosulu anlamsiz olur ve"
+  say "         betik hicbir sey olcmeden yesil donerdi."
+  exit 1
+fi
+
 # --- 1) Yuk uretici, arka planda ---
 (
   while [ ! -f "$STOP_FILE" ]; do
@@ -99,8 +120,7 @@ sleep 2
 
 # --- 2) Guncellemeyi tetikle ---
 #
-# Once MEVCUT pod adlari kaydediliyor. Bitisi bunlarin YOK OLMASIYLA tanimlayacagiz.
-OLD_PODS=$(pods_of "$DEPLOYMENT")
+# Bitis, yukarida kaydedilen pod adlarinin YOK OLMASIYLA tanimli.
 say "  pod'lar yeniden olusturuluyor..."
 kubectl -n "$NS" rollout restart "deployment/${DEPLOYMENT}" >/dev/null
 

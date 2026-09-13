@@ -183,6 +183,27 @@ class StockAdjustmentServiceTest {
     }
 
     @Test
+    @DisplayName("düzeltme kimliği '|' içerse bile sayfalama çalışır")
+    void cursorSurvivesSeparatorInsideTheId() {
+        // Kimliği İSTEMCİ veriyor ve serbest metin: "INV|2026|001" gibi bir irsaliye
+        // numarası son derece makul. İşaret son ayırıcıdan bölünseydi, ayırıcı
+        // kimliğin içine düşer ve tarih kısmı bozulurdu — sunucunun KENDİ ürettiği
+        // işaret 400 dönerdi ve o SKU'nun denetim izi ilk sayfadan sonra hiç
+        // okunamazdı.
+        String awkwardId = "INV|2026|001";
+        when(adjustments.findBySku(eq(SKU), isNull(), isNull(), anyInt()))
+                .thenReturn(List.of(adjustment(awkwardId, NOW), adjustment("fazlalik", NOW)));
+
+        String cursor = service.history(SKU, null, 1).nextCursor();
+        assertThat(cursor).isNotNull();
+
+        service.history(SKU, cursor, 1);
+
+        // İşaret çözülebildi ve sınır DOĞRU kimlikle kuruldu.
+        verify(adjustments).findBySku(SKU, NOW, awkwardId, 2);
+    }
+
+    @Test
     @DisplayName("bozuk işaret sessizce ilk sayfaya DÖNMEZ, hata verir")
     void rejectsBrokenCursor() {
         // Sessizce başa dönmek, okuyan kişiye sayfa çevirdiğini sandırırken aynı
