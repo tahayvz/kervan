@@ -706,6 +706,15 @@ laptop entirely (ADR-0020).
 The test is load-bearing: breaking the compensation step on purpose turns **only** the
 compensation case red and leaves the other two green.
 
+What the bridge cannot prove, the connector files are pinned for instead. Debezium is
+not run, but its configuration is tied to the rest of the system: the topic a connector
+writes to must equal the topic the consuming service listens on, the columns it reads
+must exist in that service's migrations, and the traps already paid for once — a
+heartbeat that kills the task, a JSON header converter that silently voids trace
+context, a snapshot that replays the outbox — must stay gone. Rename a topic in one file
+and the build goes red naming both files. The bridge reads those same files rather than
+copying their values, so the stand-in cannot drift from the real thing.
+
 Standing three Spring applications on one classpath surfaced three collisions worth
 knowing about — the repackaged jar is not a usable dependency, `classpath:db/migration`
 is a global namespace, and so is `classpath:/application.yml`. The first two were real

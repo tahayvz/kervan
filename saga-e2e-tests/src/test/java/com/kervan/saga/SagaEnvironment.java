@@ -89,8 +89,9 @@ final class SagaEnvironment {
         order = boot(OrderServiceApplication.class, "orders");
 
         bridge = new OutboxBridge(KAFKA.getBootstrapServers());
-        bridge.add(jdbcUrlFor("inventory"), "kervan.inventory.events");
-        bridge.add(jdbcUrlFor("payment"), "kervan.payments.events");
+        // Konu adlari burada YAZILMIYOR: kopru onlari konektor dosyasindan okuyor.
+        bridge.add(jdbcUrlFor("inventory"), "inventory-outbox-connector.json");
+        bridge.add(jdbcUrlFor("payment"), "payment-outbox-connector.json");
         bridge.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(SagaEnvironment::stop));

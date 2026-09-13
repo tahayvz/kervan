@@ -47,28 +47,31 @@ import java.util.concurrent.TimeUnit;
  * <b>doğrulanmaz</b>; o, sözleşme testlerinde ve Faz 10'un compose koşusunda
  * doğrulanıyor.
  *
- * <h2>Kural, konektör dosyasından birebir alındı</h2>
- * {@code infra/docker/debezium/inventory-outbox-connector.json}:
- * <pre>
- *   transforms.outbox.table.field.event.key       = aggregate_id
- *   transforms.outbox.table.field.event.payload   = payload
- *   transforms.outbox.route.topic.replacement     = kervan.inventory.events
- *   transforms.outbox.table.fields.additional.placement = trace_parent:header:traceparent
- * </pre>
- * Yani: anahtar {@code aggregate_id}, değer {@code payload} baytları <b>olduğu
- * gibi</b>, konu sabit, {@code trace_parent} sütunu {@code traceparent} başlığına.
- * Payload zaten Confluent kablo biçiminde (sihirli bayt + şema kimliği) yazılmış;
- * köprü onu çözmez, dokunmaz.
+ * <h2>Kural konektör dosyasının KENDİSİNDEN okunuyor</h2>
+ * Hedef konu, anahtar sütunu, payload sütunu ve {@code traceparent} eşlemesi
+ * {@code infra/docker/debezium/*-outbox-connector.json} dosyasından alınır
+ * ({@link ConnectorConfig}). Elle kopyalanmaz.
  *
- * <h2>Bu kural ELLE kopyalandı ve kayabilir</h2>
- * Taklidin klasik zayıflığı: taklit ettiği şeyle birlikte güncellenmez. Konektör
- * JSON'u değişirse (başka bir konu, başka bir anahtar alanı) bu sınıf değişmez ve test
- * yine yeşil kalır. Yani konektör yapılandırmasındaki bir hata burada
- * <b>yakalanmaz</b>. Konektör dosyalarına dokunan, bu sınıfa da bakmalı.
+ * <p>İlk hâlinde kopyalanmıştı ve bu, taklidin klasik zayıflığıydı: taklit, taklit
+ * ettiği şeyle birlikte güncellenmez. Dosyada konu adı değişse köprü eskisini
+ * kullanmaya devam eder, test yine yeşil kalır ve dosyadaki hata görülmezdi.
+ *
+ * <p>Payload zaten Confluent kablo biçiminde (sihirli bayt + şema kimliği) yazılmış;
+ * köprü onu çözmez, baytları olduğu gibi taşır.
+ *
+ * <h2>Yine de neyi doğrulamadığı açık olmalı</h2>
+ * Köprü, dosyadaki <em>değerleri</em> uygular ama Debezium'un <em>kendisini</em>
+ * çalıştırmaz: mantıksal çözümleme (logical decoding), yayın (publication), slot,
+ * snapshot davranışı ve dönüştürücü seçimleri burada sınanmaz. Dosyanın geri kalanı
+ * {@link OutboxConnectorConfigTest} ile sabitlenir.
  */
 final class OutboxBridge {
 
-    private record Source(String jdbcUrl, String topic) {
+    private record Source(String jdbcUrl, ConnectorConfig connector) {
+
+        String topic() {
+            return connector.fixedTopic();
+        }
     }
 
     private final String bootstrapServers;
@@ -85,8 +88,12 @@ final class OutboxBridge {
         this.bootstrapServers = bootstrapServers;
     }
 
-    void add(String jdbcUrl, String topic) {
-        sources.add(new Source(jdbcUrl, topic));
+    /**
+     * Bir outbox tablosunu, onu taşıyan Debezium konektörünün <b>kendi dosyasıyla</b>
+     * kaydeder. Kural elle yazılmaz; dosyadan okunur.
+     */
+    void add(String jdbcUrl, String connectorFile) {
+        sources.add(new Source(jdbcUrl, ConnectorConfig.load(connectorFile)));
     }
 
     void start() {
@@ -144,25 +151,31 @@ final class OutboxBridge {
     }
 
     private void drain(Source source) throws Exception {
+        ConnectorConfig c = source.connector();
         try (Connection connection = DriverManager.getConnection(
                 source.jdbcUrl(), SagaEnvironment.POSTGRES.getUsername(),
                 SagaEnvironment.POSTGRES.getPassword());
              PreparedStatement statement = connection.prepareStatement(
-                     "SELECT id, aggregate_id, payload, trace_parent "
-                             + "FROM outbox_messages ORDER BY occurred_at ASC");
+                     // Sutun adlari KONEKTOR DOSYASINDAN. Biri dosyada degisip burada
+                     // degismeseydi kopru eski sutunu okur, test yine yesil kalir ve
+                     // dosyadaki hata gorulmezdi.
+                     ("SELECT %s, %s, %s, %s FROM outbox_messages ORDER BY occurred_at ASC")
+                             .formatted(c.idColumn(), c.keyColumn(),
+                                     c.payloadColumn(), c.traceParentColumn()));
              ResultSet rows = statement.executeQuery()) {
 
             while (rows.next()) {
-                String key = source.topic() + "/" + rows.getString("id");
+                String key = source.topic() + "/" + rows.getString(c.idColumn());
                 if (published.contains(key)) {
                     continue;
                 }
                 ProducerRecord<String, byte[]> record = new ProducerRecord<>(
-                        source.topic(), rows.getString("aggregate_id"), rows.getBytes("payload"));
+                        source.topic(), rows.getString(c.keyColumn()), rows.getBytes(c.payloadColumn()));
 
-                String traceParent = rows.getString("trace_parent");
+                String traceParent = rows.getString(c.traceParentColumn());
                 if (traceParent != null) {
-                    record.headers().add("traceparent", traceParent.getBytes(StandardCharsets.UTF_8));
+                    record.headers().add(c.traceParentHeader(),
+                            traceParent.getBytes(StandardCharsets.UTF_8));
                 }
 
                 // GONDERIM ONCE DOGRULANIR, SONRA "tasindi" diye isaretlenir.

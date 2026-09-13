@@ -71,9 +71,20 @@ parça, bizim kodumuz olmayan tek parça.
 - **Olumlu:** Yol boyunca üç gerçek çakışma çıktı (aşağıda); üçü de tek bir JVM'de
   birden fazla Spring uygulaması çalıştırmanın yapısal sonuçlarıydı ve ikisi gerçek
   bir hijyen eksikliğine işaret ediyordu.
-- **Olumsuz / ödün:** Debezium'un **kendi** yapılandırması burada doğrulanmaz. O,
-  sözleşme testlerinde ve Faz 10'un compose koşusunda doğrulanıyor — ama bu iki
-  yerin de otomatik bir kapısı yok.
+- **Olumsuz / ödün:** Debezium'un **çalıştığı** burada doğrulanmaz — mantıksal
+  çözümleme, yayın (publication), replication slot, snapshot davranışı. Bunlar yalnızca
+  Faz 10'un compose koşusunda, elle görüldü.
+
+  *Güncelleme (2026-09-13):* bu ADR ilk yazıldığında "konektör JSON'undaki bir hata CI'yı
+  kırmaz" deniyordu. Artık **kısmen kırıyor**. `OutboxConnectorConfigTest` konektör
+  dosyalarını sistemin geri kalanına bağlıyor: konektörün yazdığı konu ile servisin
+  dinlediği konunun aynı olduğunu, okuduğu sütunların göçlerde var olduğunu, ve
+  günlükteki tuzakların (kalp atışı açık, `header.converter` JSON, `snapshot.mode`)
+  geri gelmediğini sınıyor. Köprü de artık kuralı elle taşımıyor, **aynı dosyadan
+  okuyor** — yani taklit ile aslı arasındaki kayma kapandı.
+
+  Ayrım net kalsın: bu, *değerlerin* doğru olduğunu söyler; *düzeneğin çalıştığını*
+  değil.
 - **Olumsuz / ödün:** `catalog` ve `search` bu testin dışında. Saga'ya katılmıyorlar.
 
 ## Yol boyunca gereken üç yapısal değişiklik
