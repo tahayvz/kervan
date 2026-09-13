@@ -80,6 +80,11 @@ birincil anahtar, karar `INSERT ... ON CONFLICT DO NOTHING` ile veritabanında.
 - **Olumlu:** Denetim izi okunabilir (`GET .../adjustments`). Okunamayan bir iz, iz
   değildir.
 - **Olumlu:** Düzeltmeyi yapanın kimliği istemciye bırakılmıyor.
+- **Olumlu:** Stok hareketi **ölçülüyor** (ADR-0014'ün iş metriği standardı):
+  `kervan_stock_received_items` ve `kervan_stock_adjusted_items{reason,direction}`,
+  Grafana panosunda bir satır. Denetim izi "ne oldu" sorusunu tek tek cevaplar;
+  metrik "eğilim ne" sorusunu cevaplar ve asıl alarm ikincisine kurulur — her
+  düzeltme tek başına meşrudur, `SHRINKAGE`'in on katına çıkması değildir.
 - **Olumsuz / ödün:** Gerekçe listesi zamanla yetmeyebilir. Her yeni değer, geçmiş
   kayıtları yeniden yorumlamayı gerektirir; eklemek ucuz görünür, geriye dönük olarak
   pahalıdır. Bu yüzden liste kasten kısa tutuldu ve `OTHER` var.

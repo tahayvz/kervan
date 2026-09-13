@@ -65,6 +65,27 @@ gerçekten kaybolduysa doğru cevap stoğu düzeltmek değil, o siparişi iptal 
 **Eksiye düşen düzeltme reddedilir, sıfıra yuvarlanmaz.** "5 tane kırıldı" denildiğinde
 elde 3 varsa gerçek dünyada bir şey daha yanlış demektir; yuvarlamak onu gizler.
 
+**Stok hareketi ölçülüyor.** İki metrik, ikisi de `DistributionSummary` — çünkü iki
+ayrı soru var: *kaç hareket oldu* (`_count`) ve *toplam kaç adet* (`_sum`). Yüz tane
+bir adetlik düzeltme ile tek bir yüz adetlik düzeltme aynı şey değildir; biri süreç
+sorunu, diğeri olay.
+
+| Metrik | Etiketler | Hangi soruyu cevaplar |
+|---|---|---|
+| `kervan_stock_received_items` | — | Ne kadar mal girdi? |
+| `kervan_stock_adjusted_items` | `reason`, `direction` | Ne kadar stok, hangi gerekçeyle yazıldı? |
+
+Asıl değer ikisini **birlikte** okumakta: giren mala oranla yazılan zarar. O oran
+yükseliyorsa depoda bir şey bozuluyordur ve bunu başka hiçbir sinyal söylemez — her
+düzeltme tek tek meşrudur, sorun eğilimdedir.
+
+SKU **etiket değil**: ürün sayısı kadar zaman serisi açardı (ADR-0014'ün kardinalite
+kuralı). Tekrar gönderilen makbuz/düzeltme sayılmaz, reddedilen düzeltme de sayılmaz.
+
+Dışa aktarılan ad, kodda yazılan ad **değildir** (`kervan.stock.received` →
+`kervan_stock_received_items_sum`). Grafana panosu o çıktıya bakar, o yüzden hem adlar
+hem panonun sorguları testle sabitlendi: `PrometheusEndpointTest`.
+
 **Denetim izi sayfalı.** `?cursor=` ve `?size=` (varsayılan 50, üst sınır 200);
 `nextCursor` boş gelene kadar aynı değeri geri gönder. `OFFSET` kullanılmıyor: iz
 ekleme yapılan bir defter, sayfa çevrilirken araya yeni kayıt girerse `OFFSET` sınırı

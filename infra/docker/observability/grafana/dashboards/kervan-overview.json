@@ -899,6 +899,192 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "type": "row",
+      "title": "Stok hareketi",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Giren mal vs yazilan zarar (adet/dk)",
+      "description": "Ikisi birlikte okunur. Giren mal sabitken 'out' yukseliyorsa depoda bir sey bozuluyor demektir ve bunu baska hicbir sinyal soylemez. Hata log'una dusmez: her duzeltme tek tek mesrudur, sorun EGILIMDEDIR.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 42
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(kervan_stock_received_items_sum[5m])) * 60",
+          "legendFormat": "giren",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(kervan_stock_adjusted_items_sum{direction=\"out\"}[5m])) * 60",
+          "legendFormat": "yazilan zarar",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Duzeltme: gerekceye gore (adet/dk)",
+      "description": "SHRINKAGE bir haftada on katina ciktiysa depoda bir sey oluyordur. COUNT_CORRECTION surekli artiyorsa sayim sureci bozuktur. Etiket sinirli bir listeden (alti deger), SKU etiket DEGIL: urun sayisi kadar seri acardi.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 42
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (rate(kervan_stock_adjusted_items_sum[5m])) * 60",
+          "legendFormat": "{{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Duzeltme sikligi vs buyuklugu",
+      "description": "Yuz tane bir adetlik duzeltme ile tek bir yuz adetlik duzeltme AYNI SEY DEGIL: biri surec sorunu, digeri olay. DistributionSummary ikisini de veriyor -- _count sikligi, _sum buyuklugu.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 42
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(kervan_stock_adjusted_items_count[5m])) * 60",
+          "legendFormat": "duzeltme sayisi/dk",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(kervan_stock_adjusted_items_sum[5m])) / clamp_min(sum(rate(kervan_stock_adjusted_items_count[5m])), 0.0001)",
+          "legendFormat": "ortalama buyukluk",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
     }
   ],
   "templating": {

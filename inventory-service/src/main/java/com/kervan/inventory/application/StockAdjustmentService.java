@@ -101,6 +101,17 @@ public class StockAdjustmentService {
         StockItem current = stockRepository.lockAll(List.of(sku)).stream().findFirst()
                 .orElseThrow(() -> new StockNotFoundException(sku));
 
+        // DOGRULAMA, DEFTERE YAZMADAN ONCE.
+        //
+        // Once yazip sonra dogrulamak da "calisiyordu": gecersiz bir duzeltmede
+        // istisna transaction'i geri aliyor ve satir kaybolyordu. Ama bu, olmayacak
+        // bir isi deftere yazip sonra silmek demekti -- ve sayaci deftere yazma
+        // anina baglayan her sey (asagidaki metrik sarmalayicisi) reddedilmis
+        // duzeltmeleri de saymis olurdu.
+        //
+        // Simdi sira dogru: gecersizse hic yazilmaz.
+        StockItem updated = current.adjust(delta);
+
         Instant now = clock.instant();
         boolean isNew = adjustments.saveIfNew(new StockAdjustment(
                 adjustmentId, sku, delta, reason, note, adjustedBy, now));
@@ -109,7 +120,6 @@ public class StockAdjustmentService {
             return current;
         }
 
-        StockItem updated = current.adjust(delta);
         stockRepository.saveAll(List.of(updated));
 
         // INFO seviyesinde ve tam: bu satır denetim izinin ikinci kopyası.
