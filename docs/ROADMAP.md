@@ -468,4 +468,5 @@ yapılıyor; gerekçesi ve ödünü ADR'de. Mutasyonla doğrulandı.
 - **Multi-tenant** yaklaşımı
 - **gRPC** (servis-içi yüksek performanslı senkron çağrılar)
 
-Bu maddeler CV'yi "senior"dan "staff/lead" seviyesine taşır.
+Bu maddelerin ortak yanı şudur: Her biri, bugün tek bir yerde çözülen bir sorunu
+sistem genelinde çözer. Sıraya alınırlarsa gerekçeleri ADR olarak yenilenmelidir.
