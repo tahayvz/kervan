@@ -31,8 +31,12 @@ tablosuna asla doğrudan erişilmez — yalnızca API veya event üzerinden konu
 | **Order** | Sipariş yaşam döngüsü, Saga orkestrasyonu | **PostgreSQL** — orders, order_items, saga_state |
 | **Payment** | Ödeme alma / iade | **PostgreSQL** — payments, refunds |
 | **Search** | Okuma modeli (CQRS), arama indeksi | **Elasticsearch** index |
-| **Notification** | E-posta / SMS / push (simülasyon) | **PostgreSQL** — notifications |
 | **Identity** | Kimlik & yetki (Keycloak devreder) | Keycloak realm |
+
+> **Bildirim (notification) bir context olarak açılmadı.** Tasarım onu kaldırırdı —
+> sipariş olaylarını dinleyip e-posta/SMS gönderen bir tüketici olurdu. Yazılmadı,
+> çünkü bu projede sınanacak yeni bir problem getirmiyordu: ne dağıtık tutarlılık,
+> ne yeni bir depo ailesi, ne yeni bir hata modu.
 
 > **İlke:** "Servis sınırı = veri sahipliği sınırı." Paylaşılan veritabanı yoktur.
 > Bu, ekiplerin bağımsız deploy edebilmesinin ön koşuludur.
@@ -75,12 +79,14 @@ zorlamayız (bkz. ADR-0006):
 
 > **Bugünkü durum:** Avro ve Schema Registry kullanımda (ADR-0008). Şemalar ortak
 > `event-contracts` modülünde; uyumluluk modu BACKWARD. Outbox kaydını Kafka'ya
-> taşıyan iş şu an uygulama içindeki bir yayıncıdır; Debezium'a geçiş Faz 3c'dedir
-> (§4.2).
+> **Debezium taşır** (§4.2). Order servisinde uygulama içi bir yayıncı da duruyor ve
+> `kervan.outbox.publisher.enabled` ile kapatılabilir; ikisi birden açık bırakılırsa
+> her olay iki kez gider. Inventory ve Payment'ta o yayıncı hiç yok — orada taşıyan
+> tek şey Debezium'dur.
 
 ```
 Senkron  : İstemci ──REST──▶ Gateway ──REST──▶ Catalog   (anlık cevap)
-Asenkron : Order ──event──▶ Kafka ──▶ {Inventory, Payment, Search, Notification}
+Asenkron : Order ──event──▶ Kafka ──▶ {Inventory, Payment}   ·   Catalog ──CDC──▶ Kafka ──▶ {Search}
 ```
 
 ---

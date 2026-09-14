@@ -110,15 +110,17 @@ Kafka when they do not.
         │  Catalog  │    │    Order    │   │   Search    │
         │ (MongoDB) │    │ (Postgres)  │   │(Elasticsearch)
         └─────┬─────┘    └──────┬──────┘   └──────▲──────┘
-              │ Outbox          │ Saga            │ indexing
+              │ CDC             │ Saga            │ indexing
               │                 ▼                 │
               │          ┌──────────────┐         │
               └─────────▶│ Apache Kafka │─────────┘
                          │ + Schema Reg │
-              ┌──────────┴──────┬───────┴──────────┐
-        ┌─────▼─────┐    ┌──────▼──────┐    ┌──────▼──────┐
-        │ Inventory │    │   Payment   │    │Notification │
-        └───────────┘    └─────────────┘    └─────────────┘
+                         └───┬──────┬───┘
+                  ┌──────────┘      └──────────┐
+            ┌─────▼─────┐              ┌───────▼─────┐
+            │ Inventory │              │   Payment   │
+            │(Postgres) │              │ (Postgres)  │
+            └───────────┘              └─────────────┘
 ```
 
 Two decisions worth calling out, both recorded as ADRs:
@@ -140,7 +142,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Implemented today
 
-Both services use hexagonal architecture — the domain packages contain no Spring, JPA or
+Every service uses the same layering — the domain packages contain no Spring, JPA or
 MongoDB types, so business rules are tested without a database.
 
 ### Catalog Service
@@ -817,19 +819,43 @@ Rationale for each choice, including the alternatives that were rejected:
 
 Requires Java 21, Maven 3.9+, Docker and Docker Compose.
 
+Build the modules and the six service images first; the compose file expects them to
+exist locally.
+
+```bash
+mvn clean install -DskipTests
+docker compose -f infra/docker/docker-compose.yml build
+```
+
+Then bring the whole thing up — infrastructure and services in one go.
+
 ```bash
 docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
-```bash
-mvn test     # 109 tests: 21 catalog + 79 order + 9 gateway
-```
+Give it a couple of minutes. Compose has no dependency ordering, so a service that
+outruns its database crashes and is restarted until the database answers. Converging
+that way is normal here; a container restarting three times during startup is not a
+failure.
+
+Then ask whether the stack works rather than assuming it did:
 
 ```bash
-mvn -pl catalog-service spring-boot:run   # http://localhost:8081
-mvn -pl order-service   spring-boot:run   # http://localhost:8082
-mvn -pl api-gateway     spring-boot:run   # http://localhost:8000  (front door)
+scripts/smoke.sh      # 17 checks — health, tokens, routing, authorisation, observability
+scripts/seed.sh 25    # 25 products and their stock, created through the gateway
 ```
+
+The front door is http://localhost:8000. Grafana is on :3000, Jaeger on :16686,
+Prometheus on :9090.
+
+```bash
+mvn verify                                    # 380 tests
+mvn verify -Dsurefire.runOrder=alphabetical   # the same tests in a different order
+```
+
+The second line is not redundant. Surefire's default order is `filesystem`, which varies
+by operating system — two metric assertions once passed here and failed in CI for that
+reason alone.
 
 Order endpoints require a bearer token. The local Keycloak realm (`kervan`) ships with
 two users for manual exploration — `musteri` / `musteri` (CUSTOMER) and `yonetici` /
